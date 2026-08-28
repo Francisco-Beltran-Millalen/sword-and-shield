@@ -26,6 +26,10 @@ func after_each() -> void:
 	if is_instance_valid(enemy):
 		enemy.queue_free()
 	h.teardown()
+	# `queue_free()` no libera hasta el final del frame, y GUT cuenta los hijos
+	# del script en cuanto vuelve de aquí: sin esperar, avisa de nodos sin
+	# liberar que sí se van a liberar. Ese aviso tapa los de verdad.
+	await get_tree().process_frame
 
 
 ## Coloca un enemigo. `scripted` sustituye su IA por un guion de test, que es la

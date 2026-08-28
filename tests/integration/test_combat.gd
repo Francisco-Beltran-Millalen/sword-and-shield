@@ -10,6 +10,7 @@ extends GutTest
 const HitboxScript := preload("res://components/hitbox.gd")
 const HurtboxScript := preload("res://components/hurtbox.gd")
 const GuardBoxScript := preload("res://components/guard_box.gd")
+const HealthScript := preload("res://components/health_component.gd")
 
 const LAYER_PLAYER_HITBOX := 1 << 3
 const LAYER_ENEMY_HURTBOX := 1 << 6
@@ -29,16 +30,32 @@ func _make_hitbox(layer: int, mask: int) -> Hitbox:
 	return box
 
 
+## Una hurtbox con la salud a la que pertenece.
+##
+## Colgarla de una entidad con `HealthComponent` no es adorno: sin él `Hurtbox`
+## avisa —con razón— de que no podrá respetar los i-frames, y ese aviso salía
+## cuatro veces por corrida tapando los avisos de verdad. El montaje suelto era
+## el que mentía, no la advertencia.
 func _make_hurtbox(layer: int) -> Hurtbox:
+	var host := Node2D.new()
+	var health := HealthScript.new() as HealthComponent
+	health.name = "HealthComponent"
+	host.add_child(health)
+
 	var box := HurtboxScript.new() as Hurtbox
 	box.collision_layer = layer
 	box.collision_mask = 0
+	# Explícito: en un nodo construido a mano `owner` es null, así que la
+	# búsqueda automática de `Hurtbox` no tiene por dónde empezar.
+	box.health_component = health
 	var shape := CollisionShape2D.new()
 	var rect := RectangleShape2D.new()
 	rect.size = Vector2(40, 40)
 	shape.shape = rect
 	box.add_child(shape)
-	add_child_autofree(box)
+	host.add_child(box)
+
+	add_child_autofree(host)
 	return box
 
 

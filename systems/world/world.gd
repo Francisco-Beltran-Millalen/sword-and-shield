@@ -52,19 +52,24 @@ func _load_zone(zone_path: String, from_door: StringName) -> void:
 			door.waiting_changed.disconnect(hud.set_door_wait)
 	hud.set_door_wait(0, 0)
 
-	for child in zone_root.get_children():
-		zone_root.remove_child(child)
-		child.queue_free()
-
+	# Se instancia ANTES de destruir la anterior: si la carga falla a media
+	# función, `current_zone` se quedaba apuntando a un nodo ya liberado y la
+	# siguiente llamada le pedía sus puertas.
 	var packed := load(zone_path) as PackedScene
 	if packed == null:
 		push_error("No se pudo cargar la zona '%s'." % zone_path)
 		return
 
-	current_zone = packed.instantiate() as Zone
-	if current_zone == null:
+	var loaded := packed.instantiate() as Zone
+	if loaded == null:
 		push_error("La escena '%s' no tiene raíz Zone." % zone_path)
 		return
+
+	for child in zone_root.get_children():
+		zone_root.remove_child(child)
+		child.queue_free()
+
+	current_zone = loaded
 	zone_root.add_child(current_zone)
 
 	for door in current_zone.doors():
@@ -72,15 +77,32 @@ func _load_zone(zone_path: String, from_door: StringName) -> void:
 		door.waiting_changed.connect(hud.set_door_wait)
 
 	GameEvents.zone_entered.emit(current_zone.zone_id)
+
+	# La puerta por la que se llega tiene que saber que los recibió, o los verá
+	# entrar y pedirá volver por donde se vino. Se avisa ANTES de colocarlos.
+	var entry := current_zone.door(from_door)
+	if entry != null:
+		entry.receive_arrival()
+
 	_place_players(current_zone.arrival_point(from_door))
 
 
+## Coloca a los viajeros de ESTE peer en el punto de llegada.
+##
+## Cada uno coloca el suyo (§3, autoridad por jugador) y el resultado viaja por
+## el `MultiplayerSynchronizer`. Mover aquí a un cuerpo ajeno no solo escribe un
+## dato de otro: su dueño lo devuelve en el paquete siguiente —`position` se
+## replica en modo ALWAYS—, y ese vaivén de salir y volver a entrar es lo que la
+## puerta de llegada lee como un cruce.
 func _place_players(at: Vector2) -> void:
 	var offset := -40.0
 	for child in players_root.get_children():
 		# Por método y no por tipo: cualquier cosa reubicable vale, igual que en
 		# `_on_entity_downed`.
 		if not child.has_method("place_at"):
+			continue
+		if multiplayer.has_multiplayer_peer() and not child.is_multiplayer_authority():
+			offset += 80.0
 			continue
 		child.place_at(at + Vector2(offset, -40.0))
 		offset += 80.0
@@ -185,6 +207,12 @@ func _spawn_player(data: Variant) -> Node:
 ## Recibe la entidad por `bind`, así que sirve igual para un enemigo que deba
 ## reaparecer: no comprueba tipos ni busca por índice.
 func _on_entity_downed(_source: Node, entity: Node) -> void:
+	# Solo la corre el peer que manda sobre el caído. `_spawn_player` se ejecuta
+	# en todos, y `HealthComponent` reemite `depleted` al llegar la salud
+	# replicada, así que sin esto había dos temporizadores desfasados por la
+	# latencia reviviendo y recolocando un cuerpo ajeno (§4: un solo escritor).
+	if multiplayer.has_multiplayer_peer() and not entity.is_multiplayer_authority():
+		return
 	var timer := get_tree().create_timer(1.5)
 	await timer.timeout
 	if not is_instance_valid(entity):

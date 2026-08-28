@@ -53,7 +53,7 @@ registrada o si alguien pasa de 400 líneas (§6).
 
 ## Trampa recurrente: verde no significa funcionando
 
-Ha pasado **cuatro veces** en este proyecto. Los tests pasaban y la funcionalidad no existía:
+Ha pasado **cinco veces** en este proyecto. Los tests pasaban y la funcionalidad no existía:
 
 1. `room_scaffold.gd` no compilaba. Un error de parseo deja al nodo **sin script** sin
    romper la instanciación de la escena: las salas quedaban sin suelo y la suite seguía
@@ -66,6 +66,13 @@ Ha pasado **cuatro veces** en este proyecto. Los tests pasaban y la funcionalida
    contra un salto de 101. Las dos zonas eran intransitables: el jugador caía en la
    primera sala y no podía salir. El juego arrancaba sin un solo error y la suite daba
    119/119, porque **ningún test conducía a un jugador por la geometría**.
+
+5. `arrival_point()` de una puerta es su **centro**, y `World._place_players` dejaba a
+   los jugadores ahí: al cruzar aparecían DENTRO del área de la puerta de destino, que
+   volvía a cumplir sus condiciones y pedía volver por donde se vino. Medido: veinte
+   cargas de zona en cuatro segundos, en bucle. La suite daba 151/151 porque **ningún
+   test cruzaba una puerta** — solo se podía descubrir cuando la geometría del punto 4
+   dejó de ser intransitable.
 
 **Consecuencias prácticas:**
 
@@ -102,9 +109,14 @@ Ha pasado **cuatro veces** en este proyecto. Los tests pasaban y la funcionalida
 | **La zona es la unidad de carga; la sala solo encuadra** | Ver `docs/adr/rationale/adr-001-zonas-y-salas.md`. Cargar por sala con dos jugadores independientes es una fuente permanente de desincronización |
 | **Kits fijos, repartidos por `peer_id`** (host = espada) | Determinista: cada cliente lo calcula solo, no se replica. Un desajuste es imposible por construcción |
 
-Antes de preguntar por la autoridad de red, comprueba `multiplayer.has_multiplayer_peer()`:
-tras una desconexión la escena vive unos frames sin peer y consultar ahí es un error de
-motor.
+**`has_multiplayer_peer()` NO distingue si hay red.** Medido: sin sesión devuelve `true`,
+porque Godot 4 instala un `OfflineMultiplayerPeer` por defecto, con `get_unique_id() == 1`.
+Es decir, la primera rama de `not multiplayer.has_multiplayer_peer() or …` —el patrón que
+se repite en `Player.is_local_player()`, `World` y `DamageReceiver`— no se toma nunca. No
+está causando daño: offline el único jugador es el peer 1 y sí tiene la autoridad, así que
+la segunda rama acierta. Pero no sirve como comprobación de "¿estamos en red?", y un nodo
+con autoridad de otro peer se comporta como remoto aunque se juegue en un solo proceso —
+por eso un segundo jugador montado a mano en un test no lo coloca `_place_players`.
 
 ---
 

@@ -46,7 +46,12 @@ signal waiting_changed(present: int, required: int)
 @export var editor_color: Color = Color(0.98, 0.72, 0.26, 0.28)
 
 var _shape: CollisionShape2D
-var _present: Array[int] = []
+## Viajeros que han SALIDO del área desde la última llegada por esta puerta.
+## Solo ellos pueden pedir viaje mientras `_received_arrival` esté puesto: ver
+## `receive_arrival()`.
+var _have_left: Array[int] = []
+## ¿Se ha dejado aquí a alguien que acaba de cruzar? Lo empuja el `World`.
+var _received_arrival: bool = false
 
 
 func _ready() -> void:
@@ -62,6 +67,39 @@ func _ready() -> void:
 ## Punto donde dejar a un jugador que llega por esta puerta.
 func arrival_point() -> Vector2:
 	return global_position
+
+
+## Cuántos viajeros hay ahora mismo dentro.
+##
+## Se le pregunta al motor en vez de llevar la cuenta a mano (§13). Medido: la
+## lista ya refleja el evento en curso cuando se consulta desde `body_entered` o
+## `body_exited`. Un conteo propio, además, se queda con fantasmas — un cuerpo
+## liberado sin su `body_exited` dejaba la puerta muerta para siempre.
+func travellers_inside() -> int:
+	var total := 0
+	for body in get_overlapping_bodies():
+		if body.is_in_group(&"zone_travellers"):
+			total += 1
+	return total
+
+
+## El `World` acaba de dejar aquí a quienes cruzaron: esta puerta los recibió, no
+## los cruzó.
+##
+## Sin esto el viaje rebota sin fin. Los jugadores aparecen DENTRO del área de la
+## puerta de destino —`arrival_point()` es su centro—, la puerta ve cumplidas sus
+## condiciones en el paso de física siguiente y pide volver por donde se vino;
+## medido, 20 cargas de zona en 4 segundos. La bandera `_changing_zone` del
+## `World` no cubre esa ventana porque ya se ha liberado cuando la física
+## resuelve los solapamientos.
+##
+## Que lo empuje el `World` y no lo adivine la puerta es deliberado (§5): solo el
+## coordinador sabe que acaba de teletransportar cuerpos aquí. Deducirlo contando
+## frames fallaría en red, donde el jugador remoto llega una latencia más tarde y
+## su entrada parecería un cruce legítimo.
+func receive_arrival() -> void:
+	_received_arrival = true
+	_have_left.clear()
 
 
 func _rebuild() -> void:
@@ -111,18 +149,26 @@ func _get_configuration_warnings() -> PackedStringArray:
 func _on_body_entered(body: Node2D) -> void:
 	if not body.is_in_group(&"zone_travellers"):
 		return
-	var id := body.get_instance_id()
-	if _present.has(id):
+	var inside := travellers_inside()
+	# El conteo real siempre, aunque no se vaya a viajar: el HUD existe para
+	# decir POR QUÉ una puerta no se abre, y mentirle aquí lo dejaría mudo justo
+	# en ese caso.
+	waiting_changed.emit(inside, required_players)
+	if inside < required_players:
 		return
-	_present.append(id)
-	waiting_changed.emit(_present.size(), required_players)
-
-	if _present.size() >= required_players:
-		traversal_requested.emit(target_zone, target_door)
+	# Traído en brazos: apareció aquí porque el `World` lo dejó al llegar, no
+	# porque haya cruzado. Para pedir viaje hay que haber salido antes, y basta
+	# con que salga QUIEN ENTRA: un compañero parado dentro cuenta como presente
+	# pero no encierra a nadie.
+	if _received_arrival and not _have_left.has(body.get_instance_id()):
+		return
+	traversal_requested.emit(target_zone, target_door)
 
 
 func _on_body_exited(body: Node2D) -> void:
 	if not body.is_in_group(&"zone_travellers"):
 		return
-	_present.erase(body.get_instance_id())
-	waiting_changed.emit(_present.size(), required_players)
+	var id := body.get_instance_id()
+	if _received_arrival and not _have_left.has(id):
+		_have_left.append(id)
+	waiting_changed.emit(travellers_inside(), required_players)
