@@ -1,4 +1,4 @@
-[gd_scene load_steps=11 format=3]
+[gd_scene load_steps=12 format=3]
 
 [ext_resource type="Script" path="res://characters/player/player.gd" id="1"]
 [ext_resource type="Script" path="res://components/stats_component.gd" id="2"]
@@ -7,6 +7,7 @@
 [ext_resource type="Script" path="res://characters/player/locomotion.gd" id="5"]
 [ext_resource type="Script" path="res://characters/player/local_intent_source.gd" id="6"]
 [ext_resource type="Script" path="res://components/hurtbox.gd" id="7"]
+[ext_resource type="Script" path="res://systems/camera/player_camera.gd" id="8"]
 
 [sub_resource type="RectangleShape2D" id="BodyShape"]
 size = Vector2(28, 44)
@@ -24,9 +25,12 @@ properties/1/replication_mode = 1
 properties/2/path = NodePath(".:replicated_state")
 properties/2/spawn = true
 properties/2/replication_mode = 2
-properties/3/path = NodePath("HealthComponent:replicated_health")
+properties/3/path = NodePath(".:replicated_facing")
 properties/3/spawn = true
 properties/3/replication_mode = 2
+properties/4/path = NodePath("HealthComponent:replicated_health")
+properties/4/spawn = true
+properties/4/replication_mode = 2
 
 [node name="Player" type="CharacterBody2D"]
 collision_layer = 2
@@ -70,6 +74,11 @@ color = Color(0.36, 0.66, 0.86, 1)
 polygon = PackedVector2Array(-14, -44, 14, -44, 14, 0, -14, 0)
 
 [node name="AnimationPlayer" type="AnimationPlayer" parent="Visuals"]
+
+[node name="PlayerCamera" type="Camera2D" parent="."]
+enabled = false
+zoom = Vector2(1.6, 1.6)
+script = ExtResource("8")
 
 [node name="MultiplayerSynchronizer" type="MultiplayerSynchronizer" parent="."]
 replication_config = SubResource("ReplicationConfig")

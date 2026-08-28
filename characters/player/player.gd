@@ -36,6 +36,7 @@ enum State {
 @onready var intent_source: IntentSource = $IntentSource
 @onready var hurtbox: Hurtbox = $Hurtbox
 @onready var visuals: Node2D = $Visuals
+@onready var camera: PlayerCamera = $PlayerCamera
 
 var kit: PlayerKit
 var _facing: int = 1
@@ -50,6 +51,16 @@ var replicated_state: int:
 		if state_machine != null:
 			state_machine.replicated_state = value
 
+## Encaramiento replicado: sin esto un personaje remoto miraría siempre a la
+## derecha. Al llegar, aplica el volteo de los visuales igual que en local.
+var replicated_facing: int:
+	get: return _facing
+	set(value):
+		if value == 0 or value == _facing:
+			return
+		_facing = value
+		_apply_facing_visuals()
+
 
 func _ready() -> void:
 	_setup_states()
@@ -58,9 +69,46 @@ func _ready() -> void:
 	health.revived.connect(_on_revived)
 	hurtbox.wounded.connect(_on_wounded)
 	_bind_kit()
+	_apply_authority()
+
+
+## Fija qué peer manda sobre este personaje y enciende lo que corresponda.
+## La llama el spawner de la sesión al crear el jugador.
+func set_owning_peer(peer_id: int) -> void:
+	set_multiplayer_authority(peer_id)
+	if is_node_ready():
+		_apply_authority()
+
+
+## ¿Es este el personaje que controla este cliente?
+func is_local_player() -> bool:
+	return not multiplayer.has_multiplayer_peer() or is_multiplayer_authority()
+
+
+## Solo el peer con autoridad simula y ve por esta cámara. Los personajes
+## remotos apagan su cámara y su lectura de teclado: su posición y su estado
+## llegan replicados por el `MultiplayerSynchronizer`.
+func _apply_authority() -> void:
+	var local := not multiplayer.has_multiplayer_peer() or is_multiplayer_authority()
+	if camera != null:
+		camera.set_local(local)
+	if intent_source != null:
+		intent_source.set_process_mode(
+			Node.PROCESS_MODE_INHERIT if local else Node.PROCESS_MODE_DISABLED)
 
 
 func _physics_process(delta: float) -> void:
+	# Autoridad por jugador: cada peer simula el suyo y replica el resultado.
+	# Un personaje remoto no simula nada — deja que el sincronizador escriba su
+	# posición. Esto sustituye por completo al reenvío de intent por RPC del
+	# proyecto anterior, que añadía un viaje de ida y vuelta a cada pulsación.
+	#
+	# Se comprueba primero que haya peer: tras una desconexión la escena sigue
+	# viva unos frames sin `multiplayer_peer`, y preguntar por la autoridad ahí
+	# es un error de motor. Sin peer (tests, escena suelta) se simula normal.
+	if multiplayer.has_multiplayer_peer() and not is_multiplayer_authority():
+		return
+
 	var intent := intent_source.poll()
 
 	if state_machine.is_in(State.DOWNED):
@@ -160,8 +208,14 @@ func _update_facing(intent: PlayerIntent) -> void:
 	if wanted == 0 or wanted == _facing:
 		return
 	_facing = wanted
+	_apply_facing_visuals()
+
+
+func _apply_facing_visuals() -> void:
 	if visuals != null:
 		visuals.scale.x = float(_facing)
+	if kit != null:
+		kit.scale.x = float(_facing)
 	facing_changed.emit(_facing)
 
 

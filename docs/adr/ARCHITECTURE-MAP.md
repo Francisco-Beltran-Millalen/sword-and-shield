@@ -39,6 +39,8 @@ superficie pública y las cláusulas de la constitución que la gobiernan.
 | `Hitbox` | `components/hitbox.gd` (100) | Área que inflige. `enable()` / `disable()` desde pistas de método; `is_active()`, `attacker()`, `direction_to(target)`. Señales `hit`, `guarded`. Nace apagada. | §2 (emite, no aplica daño), §13 (Area2D) |
 | `Hurtbox` | `components/hurtbox.gd` (49) | Área que recibe. `accepts_hit()`, `receive()`, señal `wounded`. Etiqueta `zone` para golpes por zona. | §2, §13 |
 | `GuardBox` | `components/guard_box.gd` (86) | Área de guardia. `raise(facing)`, `lower()`, `set_facing()`, `is_in_parry_window()`, `blocks(hitbox)`. Señal `blocked(hitbox, perfect)`. | §2, §13 (Timer para el parry) |
+| `PlayerCamera` | `systems/camera/player_camera.gd` (66) | `Camera2D` del personaje. `set_local(bool)` la enciende solo en el peer con autoridad; `apply_room_bounds(Rect2)` la encierra en la sala. Adelanto horizontal y suavizado nativos. | §13 (`position_smoothing`, `limit_*`; sin lerp a mano) |
+| `Session` | `systems/network/session.gd` (60) | Autoload `SessionState`. `kit_for(peer)`, `kit_scene_for(peer)`, `kit_name_for(peer)`, `assign(host, guest)`, `clear()`. Reparto **determinista por peer_id**: no se replica. | §9 (estado de sesión, `clear()` lo vacía) |
 | `NetworkManager` | `autoloads/network_manager.gd` (150) | Autoload. `host(port)`, `join(ip, port)`, `leave(reason)`, `reset()`. Señales `game_ready`, `session_ended`, `connection_error`. **No conoce ninguna ruta de escena** — a diferencia del original. | §3, §9 (estado de sesión, se limpia en `reset`) |
 | `GameEvents` | `autoloads/game_events.gd` (51) | Autoload. Solo señales, sin estado. Eventos globales: salas, progresión, combate, sesión. Las tres condiciones de admisión están en el propio archivo. | §9 (sin estado) |
 
@@ -58,9 +60,10 @@ no se cumpla, construirlo es trabajo especulativo y no se hace.
 
 | Patrón / sistema | Disparador de activación |
 | ---------------- | ------------------------ |
-| Replicación en red (`MultiplayerSpawner`, §3, §10) | Se resuelve la decisión pendiente de cooperativo a favor de red |
-| Plataforma de cámara definitiva (`systems/camera/`) | Se elige modelo de cámara (compartida / split-screen / salas independientes) |
-| Intercambio de kits en caliente | Se decide que espada y escudo son intercambiables en partida |
+| Selección de kit en el lobby | Se quiera elegir arma en vez del reparto determinista host = espada |
+| Intercambio de kits en caliente | Se decida que espada y escudo son intercambiables a mitad de partida |
+| Reconciliación / autoridad del host sobre jugadores | Aparezca competitivo, o se detecten abusos del cliente autoritativo |
+| Simulación de enemigos autoritativa en el host | Entren enemigos: su estado no puede ser autoritativo por cliente |
 | Máquina de estados compartida en `components/` | Un segundo tipo de entidad necesita el mismo grafo de estados que el jugador |
 | Sistema de guardado | Existe progresión persistente entre sesiones (habilidades desbloqueadas) |
 
@@ -68,4 +71,7 @@ no se cumpla, construirlo es trabajo especulativo y no se hace.
 
 ## Retired
 
-Decisiones y componentes retirados, con el motivo. Vacío por ahora.
+| Qué | Motivo |
+| --- | ------ |
+| `systems/world/boot.gd` / `boot.tscn` | Andamio de dos jugadores locales sobre una escena fija. Lo sustituye `lobby.tscn` → `arena.tscn` al decidirse que el juego es solo en red. |
+| Acciones de entrada `p1_*` / `p2_*` | Colapsadas a un solo juego de acciones: cada cliente controla un personaje, no dos en el mismo teclado. |

@@ -66,18 +66,45 @@ soportada de lanzarlos.
 - `docs/adr/ARCHITECTURE-MAP.md` — registro de lo construido. Se actualiza en el mismo
   commit que el código.
 
-## Decisiones pendientes
+## Decisiones tomadas
 
-Ninguna de estas está tomada. Afectan al diseño, así que se resuelven antes de construir
-contenido que dependa de ellas.
+1. **Solo multijugador en red.** No hay cooperativo local en sofá. Cada cliente controla
+   un personaje. Por eso el InputMap tiene **un solo juego de acciones**, sin prefijo por
+   jugador.
+2. **Cámara 2D por cliente**, colgada del personaje y encendida solo en el peer que lo
+   controla (`PlayerCamera.set_local`). No hay pantalla compartida ni split-screen. Como
+   cada cliente enmarca al suyo, los dos jugadores pueden estar en salas distintas — que
+   es lo que hace viable la exploración divergente de un metroidvania cooperativo.
+3. **Kits fijos por sesión.** Quien hospeda lleva espada; quien se une, escudo. El reparto
+   es **determinista por `peer_id`** (`Session.kit_for`), así que cada cliente lo calcula
+   solo: no se replica ni se acuerda por RPC, y un desajuste es imposible por
+   construcción. `Session.assign()` queda para cuando el lobby permita elegir.
 
-1. **Modelo de cámara para 2 jugadores.** Opciones: cámara compartida con tope de
-   separación / split-screen dinámico / salas independientes por jugador. Condiciona el
-   diseño de **todas** las salas (tamaño, si los jugadores pueden separarse, si una sala
-   puede tener dos focos de acción). Es la decisión más bloqueante de las tres.
-2. **Alcance del cooperativo.** Local en sofá, en red, o ambos. Determina si las reglas
-   §3 y §10 de la constitución (NetworkManager y variables de intención como límite de
-   red) siguen vigentes o se retiran.
-3. **Asignación de kits.** Espada y escudo fijos por jugador durante toda la partida, o
-   intercambiables en mitad de la partida. Afecta al diseño de puzles y a si las
-   capacidades tienen que poder entrar y salir del árbol de escena en caliente.
+### Modelo de red: autoridad por jugador
+
+Cada peer simula su propio personaje y replica el resultado por `MultiplayerSynchronizer`.
+Un `Player` que no tiene la autoridad hace `return` al principio de `_physics_process` y
+deja que el sincronizador escriba su posición.
+
+Esto sustituye por completo al reenvío de intent por RPC del proyecto anterior, que metía
+un viaje de ida y vuelta en cada pulsación. La contrapartida es que el cliente es
+autoritativo sobre su propio personaje: aceptable en un cooperativo PvE, y a revisar si
+alguna vez hay competitivo. Los enemigos, cuando lleguen, los simulará el host.
+
+## Probar la red sin dos máquinas
+
+```bash
+# Terminal 1
+godot -- --host
+
+# Terminal 2
+godot -- --join 127.0.0.1
+```
+
+Los argumentos van después de `--`, que es como Godot separa los suyos de los del juego.
+
+## Decisiones aún abiertas
+
+1. **Alcance de la sala.** Si las dos salas activas a la vez (una por jugador) se cargan
+   simultáneamente o se descargan al alejarse. Lo decide el sistema de salas.
+2. **Guardado.** Qué se persiste y cuándo (solo en puntos de guardado, o continuo).

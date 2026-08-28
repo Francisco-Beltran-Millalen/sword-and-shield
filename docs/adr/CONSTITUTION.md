@@ -146,12 +146,18 @@ está mal modelada. Conviértela en Nodo.
 ### §3 — Disciplina de acceso a NetworkManager _[específico del juego]_
 
 Cualquier nodo puede **leer** `NetworkManager.is_active` y `NetworkManager.is_host_mode`.
-Solo las escenas coordinadoras (`systems/world/`, y el lobby cuando exista) pueden
-**llamar** `NetworkManager.host()`, `.join()` o `.reset()`.
+Solo las escenas coordinadoras (`systems/network/lobby.gd`, `systems/world/`) pueden
+**llamar** `NetworkManager.host()`, `.join()`, `.leave()` o `.reset()`.
 
-_Provisional: el alcance de esta regla depende de la decisión pendiente sofá / red /
-ambos (ver README). Si el juego termina siendo solo cooperativo local, §3 y §10 se
-retiran en vez de mantenerse como código muerto._
+Corolario: **el `NetworkManager` no conoce rutas de escena.** Avisa por señal
+(`game_ready`, `session_ended`, `connection_error`) y quien escucha decide adónde ir. En
+el proyecto anterior hacía `change_scene_to_file` en tres sitios y quedó atado al flujo
+de aquel juego.
+
+**Modelo de red: autoridad por jugador.** Cada peer simula su propio personaje y replica
+el resultado; un nodo sin la autoridad no simula. Antes de preguntar por la autoridad hay
+que comprobar `multiplayer.has_multiplayer_peer()`: tras una desconexión la escena vive
+unos frames sin peer, y consultar ahí es un error de motor.
 
 ---
 
@@ -263,12 +269,19 @@ Cada variable de estado de un autoload lleva una de estas anotaciones:
 
 ### §10 — Las variables de intención son el límite de red _[específico del juego]_
 
-El límite de red se sitúa en las variables de intención (`horizontal_input`,
-`attack_pressed`, `guard_held`, señales de salto). El adaptador de input local las escribe
-desde el `InputMap`. Los manejadores RPC las escriben desde la red. La simulación física
-las consume sin saber de dónde vienen.
+El límite se sitúa en `PlayerIntent`: un objeto con lo que el jugador quiere hacer este
+frame, sin decir de dónde viene. Lo produce una `IntentSource` — teclado
+(`LocalIntentSource`), guion de test (`ScriptedIntentSource`) o, si algún día hace falta,
+la red. Aguas abajo nada distingue el origen.
 
-_Provisional junto con §3: aplica solo si el juego incluye red._
+Con autoridad por jugador **el intent no viaja por la red**: cada peer lee su propio
+teclado y replica el resultado ya simulado. La regla sigue viva porque es lo que permite
+que los tests conduzcan a un jugador real sin tocar `Input`, y porque deja la puerta
+abierta a una fuente de red si el modelo de autoridad cambia.
+
+El proyecto anterior declaró esta clase y nunca la enhebró: su broker acabó con dos ramas
+de ~40 líneas asignando los mismos campos, una para local y otra para red. Un solo camino
+o la clase no sirve de nada.
 
 ---
 
