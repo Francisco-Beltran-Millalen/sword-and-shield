@@ -44,6 +44,9 @@ var kit: PlayerKit
 var current_room: StringName = &""
 var _facing: int = 1
 var _pending_impulse: Vector2 = Vector2.ZERO
+## Intent vacío para los estados en los que el jugador no manda (§4: la
+## locomoción sigue siendo el único escritor de `velocity`).
+var _idle_intent := PlayerIntent.new()
 
 ## Estado replicable. Un único entero en vez de las catorce propiedades que
 ## sincronizaba el proyecto anterior; el combate viajará como eventos, no como
@@ -69,6 +72,9 @@ func _ready() -> void:
 	# Lo que hace de este cuerpo un viajero entre zonas es pertenecer al grupo,
 	# no ser un `Player`: así `ZoneDoor` no necesita conocer esta clase.
 	add_to_group(&"zone_travellers")
+	# Quien empuña es el atacante, no el arma: sin esto la hitbox del kit
+	# resolvía su `owner`, que es el propio Kit (ver `Hitbox.attacker`).
+	add_to_group(&"combat_source")
 	_setup_states()
 	health.health_changed.connect(_on_health_changed)
 	health.depleted.connect(_on_depleted)
@@ -119,8 +125,11 @@ func _physics_process(delta: float) -> void:
 	var intent := intent_source.poll()
 
 	if state_machine.is_in(State.DOWNED):
-		velocity.x = move_toward(velocity.x, 0.0, stats.get_stat(StatsComponent.StatID.FRICTION) * delta)
-		move_and_slide()
+		# Un intent en blanco: se frena y cae, pero no anda ni salta. Antes esto
+		# movía el cuerpo a mano, duplicando la locomoción y dejando dos
+		# escritores de `velocity` (§4) — y un caído en el aire se quedaba
+		# flotando, porque la rama propia no aplicaba gravedad.
+		locomotion.tick(self, stats, _idle_intent, delta)
 		return
 
 	_update_facing(intent)
@@ -280,6 +289,9 @@ func _on_health_changed(current: int, maximum: int) -> void:
 func _on_depleted(_source: Node) -> void:
 	if kit != null:
 		kit.on_interrupted(self)
+	# Sin esto el salto en buffer sobrevive a la muerte y el cuerpo pega un
+	# brinco al tocar el suelo.
+	locomotion.reset()
 	state_machine.transition_to(State.DOWNED)
 
 

@@ -120,6 +120,49 @@ func test_el_ataque_pide_desplazamiento_sin_moverlo_el_mismo() -> void:
 			"el atacante pide el impulso; no escribe velocidad ajena")
 
 
+## --- Dirección del golpe ---
+##
+## Estos tres existen porque los arreglos de signo habrían entrado en verde y
+## salido en verde: ningún test afirmaba nada sobre la dirección, solo sobre si
+## la señal se emitía. La arremetida iba al lado contrario cuando el jugador
+## miraba a la izquierda, y los golpes encadenados iban siempre a la derecha.
+
+func test_la_arremetida_sigue_al_encaramiento() -> void:
+	var impulsos: Array[Vector2] = []
+	attacker.lunge_requested.connect(func(v: Vector2) -> void: impulsos.append(v))
+
+	attacker.attack(-1)
+	assert_false(impulsos.is_empty(), "el primer golpe arremete")
+	assert_lt(impulsos[0].x, 0.0, "atacando hacia la izquierda se arremete a la izquierda")
+
+
+func test_los_golpes_encadenados_conservan_el_encaramiento() -> void:
+	var impulsos: Array[Vector2] = []
+	attacker.lunge_requested.connect(func(v: Vector2) -> void: impulsos.append(v))
+
+	attacker.attack(-1)
+	await wait_seconds(0.1)
+	attacker.attack(-1)   ## encadena el segundo
+	await wait_seconds(0.35)
+
+	assert_gt(impulsos.size(), 1, "el combo encadenó un segundo golpe")
+	assert_lt(impulsos[1].x, 0.0,
+			"el segundo golpe no vuelve a preguntar el encaramiento: lo recuerda")
+
+
+func test_el_kit_no_reorienta_lo_que_el_atacante_ya_orientó() -> void:
+	# El kit volteado es lo que delataba el doble signo: el atacante orientaba
+	# el impulso y el kit se lo volvía a multiplicar.
+	kit.scale.x = -1.0
+	var reenviados: Array[Vector2] = []
+	kit.impulse_requested.connect(func(v: Vector2) -> void: reenviados.append(v))
+
+	attacker.attack(-1)
+	assert_false(reenviados.is_empty(), "el kit reenvía la petición hacia arriba")
+	assert_lt(reenviados[0].x, 0.0,
+			"lo que sale del kit apunta al mismo lado que lo que entró")
+
+
 func test_el_kit_queda_ocupado_mientras_ataca() -> void:
 	assert_false(kit.is_busy())
 	attacker.attack(1)

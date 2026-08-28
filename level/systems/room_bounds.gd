@@ -95,7 +95,9 @@ func _get_configuration_warnings() -> PackedStringArray:
 ## saberlo: se comprueba el MÉTODO, no el tipo, así que un enemigo o un NPC
 ## participan sin que esta clase los conozca (§7).
 func _on_body_entered(body: Node2D) -> void:
-	if not body.has_method("enter_room"):
-		return
-	body.enter_room(room_id, world_rect())
+	# El aviso es para cualquier ocupante; reencuadrar la cámara, solo para
+	# quien tenga una. Emitir después del `return` dejaba la señal muerta para
+	# enemigos y NPC, que es justo lo que su nombre promete cubrir.
+	if body.has_method("enter_room"):
+		body.enter_room(room_id, world_rect())
 	occupant_entered.emit(room_id, body)

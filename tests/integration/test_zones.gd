@@ -146,19 +146,28 @@ func test_cada_sala_tiene_su_propia_geometria() -> void:
 		assert_gt(solidos.size(), 0, "una sala sin geometría no tiene suelo")
 
 
-func test_un_lado_abierto_produce_menos_geometria_que_uno_cerrado() -> void:
-	# verdant_2 abre a los cuatro lados; verdant_5 solo por arriba. Un lado
-	# abierto se parte en dos tramos, uno cerrado es una pieza: más aberturas,
-	# más cuerpos.
+func test_un_lado_abierto_deja_menos_pared_que_uno_cerrado() -> void:
+	# verdant_2 abre a los cuatro lados; verdant_5 solo por arriba. Contar
+	# cuerpos no sirve —un lado vertical abierto deja un solo tramo, igual que
+	# uno cerrado—, pero abrir siempre quita material: se mide el área.
 	var cruce := _scaffold_de(&"verdant_2")
 	var fondo := _scaffold_de(&"verdant_5")
 	assert_not_null(cruce)
 	assert_not_null(fondo)
 
-	var cuerpos_cruce := cruce.find_children("*", "StaticBody2D", false, false).size()
-	var cuerpos_fondo := fondo.find_children("*", "StaticBody2D", false, false).size()
-	assert_gt(cuerpos_cruce, cuerpos_fondo,
-			"la sala con cuatro aberturas se parte en más tramos")
+	assert_lt(_area_de_pared(cruce), _area_de_pared(fondo),
+			"cada abertura recorta pared: cuatro dejan menos que una")
+
+
+func _area_de_pared(scaffold: RoomScaffold) -> float:
+	var total := 0.0
+	for nodo in scaffold.find_children("*", "StaticBody2D", false, false):
+		var forma := nodo.get_child(0) as CollisionShape2D
+		var medida: Vector2 = (forma.shape as RectangleShape2D).size
+		if medida.x <= RoomScaffold.PLATFORM_WIDTH:
+			continue   ## peldaño, no pared
+		total += medida.x * medida.y
+	return total
 
 
 func _scaffold_de(room_id: StringName) -> RoomScaffold:

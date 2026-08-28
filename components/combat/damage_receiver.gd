@@ -11,6 +11,14 @@ extends Node
 ## No mueve a nadie: **pide** el empuje por señal y quien lo reciba decide (§2).
 ## Tampoco decide qué pasa al morir — eso lo hace el dueño escuchando a su
 ## `HealthComponent`.
+##
+## **Quién aplica el daño en red.** Con autoridad por jugador, la salud de cada
+## personaje la escribe su propio peer y viaja de ahí hacia fuera. Un golpe
+## detectado en otro peer —el host simulando un enemigo, que es el caso en
+## cuanto entra el primero— descontaría salud en un lado y la replicación lo
+## pisaría en el siguiente `on_change`: el enemigo solo heriría al jugador que
+## hospeda. Por eso el impacto se detecta donde ocurre pero se **encamina** al
+## peer que manda sobre la víctima, que es el único que lo aplica.
 
 ## Se encajó un golpe. `amount` es el daño ya aplicado.
 signal damage_taken(amount: int, from: Node, hit_position: Vector2)
@@ -51,9 +59,49 @@ func preview_damage(raw: int) -> int:
 	return maxi(1, int(round(float(raw) * defense)))
 
 
-func _on_wounded(hitbox: Hitbox, hit_position: Vector2) -> void:
-	var source := hitbox.attacker()
+## ¿Manda este peer sobre la entidad que recibe el golpe? Sin sesión de red
+## (tests, escena suelta) manda siempre. Se comprueba que haya peer antes de
+## preguntar por la autoridad: tras una desconexión la escena vive unos frames
+## sin él y consultarlo ahí es un error de motor.
+func _owns_entity() -> bool:
+	var entity := get_parent()
+	if entity == null:
+		return true
+	return not multiplayer.has_multiplayer_peer() or entity.is_multiplayer_authority()
 
+
+func _on_wounded(hitbox: Hitbox, hit_position: Vector2) -> void:
+	var entity := get_parent() as Node2D
+	var direction := Vector2.ZERO
+	if entity != null:
+		direction = hitbox.direction_to(entity)
+
+	if _owns_entity():
+		_resolve(hitbox.damage, hitbox.knockback, direction, hit_position, hitbox.attacker())
+		return
+
+	# El golpe lo vio este peer, pero la salud de la víctima la lleva otro. Se
+	# le encamina el impacto ya resuelto en geometría; el atacante no viaja
+	# porque un `Node` no es serializable, y en el otro extremo el crédito se
+	# atribuye a la sesión, no a una instancia concreta.
+	_receive_routed_hit.rpc_id(entity.get_multiplayer_authority(),
+			hitbox.damage, hitbox.knockback, direction, hit_position)
+
+
+## Golpe encaminado desde el peer que lo detectó. `any_peer` porque quien lo
+## envía no es la autoridad de esta entidad — precisamente por eso lo envía. En
+## un cooperativo contra el entorno confiar en el otro cliente es aceptable; si
+## algún día hay competitivo, aquí es donde entra la validación.
+@rpc("any_peer", "call_remote", "reliable")
+func _receive_routed_hit(raw_damage: int, knockback: float,
+		direction: Vector2, hit_position: Vector2) -> void:
+	if not _owns_entity():
+		return
+	_resolve(raw_damage, knockback, direction, hit_position, null)
+
+
+func _resolve(raw_damage: int, knockback: float, direction: Vector2,
+		hit_position: Vector2, source: Node) -> void:
 	if health == null:
 		hit_ignored.emit(source)
 		return
@@ -61,7 +109,7 @@ func _on_wounded(hitbox: Hitbox, hit_position: Vector2) -> void:
 		hit_ignored.emit(source)
 		return
 
-	var amount := preview_damage(hitbox.damage)
+	var amount := preview_damage(raw_damage)
 	var applied := health.take_damage(amount, source)
 	if applied <= 0:
 		hit_ignored.emit(source)
@@ -72,9 +120,8 @@ func _on_wounded(hitbox: Hitbox, hit_position: Vector2) -> void:
 	var resistance := 1.0
 	if stats != null:
 		resistance = stats.get_stat(StatsComponent.StatID.KNOCKBACK_TAKEN)
-	var owner_node := get_parent() as Node2D
-	if owner_node != null and hitbox.knockback > 0.0:
-		knockback_requested.emit(hitbox.direction_to(owner_node) * hitbox.knockback * resistance)
+	if knockback > 0.0:
+		knockback_requested.emit(direction * knockback * resistance)
 
 
 func _sibling(node_name: String) -> Node:

@@ -62,10 +62,16 @@ func _on_chain_ended() -> void:
 
 
 func _on_lunge_requested(impulse: Vector2) -> void:
-	# El kit no mueve al jugador: reenvía la petición hacia arriba (§2).
-	impulse_requested.emit(Vector2(impulse.x * signf(scale.x if scale.x != 0.0 else 1.0), impulse.y))
+	# El kit no mueve al jugador: reenvía la petición hacia arriba (§2). Y la
+	# reenvía TAL CUAL: el `Attacker` ya la orientó con el facing que recibió.
+	# Volver a aplicarle aquí el signo del volteo mandaba la arremetida al lado
+	# contrario justo cuando el jugador miraba a la izquierda.
+	impulse_requested.emit(impulse)
 
 
 func _on_hit_landed(hurtbox: Hurtbox, _position: Vector2, data: AttackData) -> void:
-	var target := hurtbox.get_parent()
-	GameEvents.hit_landed.emit(get_parent(), target, data.damage if data != null else 0)
+	# Ni `get_parent()` como atacante ni `hurtbox.get_parent()` como víctima: el
+	# kit no tiene por qué saber de quién cuelga ni cómo arma su escena la
+	# víctima. Cada volumen resuelve su propia entidad.
+	var origen: Node = attacker.hitbox.attacker() if attacker.hitbox != null else null
+	GameEvents.hit_landed.emit(origen, hurtbox.entity(), data.damage if data != null else 0)

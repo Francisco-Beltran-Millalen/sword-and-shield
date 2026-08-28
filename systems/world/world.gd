@@ -67,10 +67,11 @@ func _load_zone(zone_path: String, from_door: StringName) -> void:
 func _place_players(at: Vector2) -> void:
 	var offset := -40.0
 	for child in players_root.get_children():
-		var player := child as Player
-		if player == null:
+		# Por método y no por tipo: cualquier cosa reubicable vale, igual que en
+		# `_on_entity_downed`.
+		if not child.has_method("place_at"):
 			continue
-		player.place_at(at + Vector2(offset, -40.0))
+		child.place_at(at + Vector2(offset, -40.0))
 		offset += 80.0
 
 
@@ -90,6 +91,13 @@ func _on_traversal_requested(target_zone: String, target_door: StringName) -> vo
 
 @rpc("authority", "call_local", "reliable")
 func rpc_change_zone(zone_path: String, from_door: StringName) -> void:
+	if multiplayer.has_multiplayer_peer() and multiplayer.is_server():
+		# La misma cortesía que se hace al arrancar la partida
+		# (`NetworkManager._start_game`): el cliente encola su carga al recibir
+		# este RPC, y el host espera un frame para que la zona ya esté en su
+		# árbol cuando los `MultiplayerSynchronizer` del host —los de los
+		# enemigos que la zona trae dentro— registren su caché de rutas.
+		await get_tree().process_frame
 	_load_zone(zone_path, from_door)
 	_changing_zone = false
 

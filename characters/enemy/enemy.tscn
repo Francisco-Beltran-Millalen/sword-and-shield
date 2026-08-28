@@ -1,0 +1,118 @@
+[gd_scene load_steps=18 format=3]
+
+[ext_resource type="Script" path="res://characters/enemy/enemy.gd" id="1"]
+[ext_resource type="Script" path="res://components/stats_component.gd" id="2"]
+[ext_resource type="Script" path="res://components/health_component.gd" id="3"]
+[ext_resource type="Script" path="res://components/state_machine.gd" id="4"]
+[ext_resource type="Script" path="res://characters/player/locomotion.gd" id="5"]
+[ext_resource type="Script" path="res://characters/enemy/ai_intent_source.gd" id="6"]
+[ext_resource type="Script" path="res://components/hurtbox.gd" id="7"]
+[ext_resource type="Script" path="res://components/combat/damage_receiver.gd" id="8"]
+[ext_resource type="Script" path="res://characters/enemy/perception.gd" id="9"]
+[ext_resource type="Script" path="res://components/hitbox.gd" id="10"]
+[ext_resource type="Script" path="res://components/combat/attacker.gd" id="11"]
+[ext_resource type="AnimationLibrary" path="res://characters/enemy/enemy_animations.tres" id="12"]
+[ext_resource type="Resource" path="res://characters/enemy/archetypes/grunt.tres" id="13"]
+
+[sub_resource type="RectangleShape2D" id="BodyShape"]
+size = Vector2(44, 44)
+
+[sub_resource type="RectangleShape2D" id="HurtShape"]
+size = Vector2(44, 44)
+
+[sub_resource type="RectangleShape2D" id="ClawShape"]
+size = Vector2(34, 30)
+
+[sub_resource type="CircleShape2D" id="EyesShape"]
+radius = 260.0
+
+[sub_resource type="SceneReplicationConfig" id="ReplicationConfig"]
+properties/0/path = NodePath(".:position")
+properties/0/spawn = true
+properties/0/replication_mode = 1
+properties/1/path = NodePath(".:replicated_state")
+properties/1/spawn = true
+properties/1/replication_mode = 2
+properties/2/path = NodePath(".:replicated_facing")
+properties/2/spawn = true
+properties/2/replication_mode = 2
+properties/3/path = NodePath("HealthComponent:replicated_health")
+properties/3/spawn = true
+properties/3/replication_mode = 2
+
+[node name="Enemy" type="CharacterBody2D"]
+collision_layer = 4
+collision_mask = 1
+script = ExtResource("1")
+archetype = ExtResource("13")
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="."]
+position = Vector2(0, -22)
+shape = SubResource("BodyShape")
+
+[node name="StatsComponent" type="Node" parent="."]
+script = ExtResource("2")
+
+[node name="HealthComponent" type="Node" parent="."]
+script = ExtResource("3")
+max_health = 6
+invulnerability_seconds = 0.25
+
+[node name="StateMachine" type="Node" parent="."]
+script = ExtResource("4")
+
+[node name="Locomotion" type="Node" parent="."]
+script = ExtResource("5")
+
+[node name="IntentSource" type="Node" parent="."]
+script = ExtResource("6")
+
+[node name="Perception" type="Area2D" parent="."]
+collision_layer = 0
+collision_mask = 2
+script = ExtResource("9")
+radius = 260.0
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="Perception"]
+shape = SubResource("EyesShape")
+
+[node name="Hurtbox" type="Area2D" parent="."]
+collision_layer = 64
+collision_mask = 0
+script = ExtResource("7")
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="Hurtbox"]
+position = Vector2(0, -22)
+shape = SubResource("HurtShape")
+
+[node name="DamageReceiver" type="Node" parent="."]
+script = ExtResource("8")
+
+[node name="Visuals" type="Node2D" parent="."]
+
+[node name="Body" type="Polygon2D" parent="Visuals"]
+color = Color(0.8, 0.28, 0.3, 1)
+polygon = PackedVector2Array(-22, -44, 22, -44, 22, 0, -22, 0)
+
+[node name="Hitbox" type="Area2D" parent="Visuals"]
+position = Vector2(6, -22)
+collision_layer = 32
+collision_mask = 144
+script = ExtResource("10")
+damage = 1
+knockback = 260.0
+attack_id = &"enemy_melee"
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="Visuals/Hitbox"]
+shape = SubResource("ClawShape")
+
+[node name="AnimationPlayer" type="AnimationPlayer" parent="."]
+libraries = {
+"": ExtResource("12")
+}
+
+[node name="Attacker" type="Node" parent="."]
+script = ExtResource("11")
+
+[node name="MultiplayerSynchronizer" type="MultiplayerSynchronizer" parent="."]
+replication_config = SubResource("ReplicationConfig")

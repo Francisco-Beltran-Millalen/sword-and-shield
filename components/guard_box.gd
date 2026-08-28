@@ -22,13 +22,20 @@ signal blocked(hitbox: Hitbox, perfect: bool)
 @export_range(0.0, 1.0, 0.05) var blocked_knockback_ratio: float = 0.35
 
 var _facing: int = 1
+## La guardia, como hecho lógico. Igual que en `Hitbox`, `monitorable` no
+## puede ser la fuente: Godot rechaza escribirlo mientras despacha señales de
+## área y `lower()` se alcanza desde dentro de una (golpe recibido → el kit se
+## interrumpe), así que la guardia se quedaba levantada sola.
+var _raised: bool = false
 var _parry_timer: Timer
 
 
 func _ready() -> void:
 	monitoring = false   ## No busca: la encuentran las hitboxes.
-	monitorable = true
-	set_deferred("monitorable", false)   ## Arranca bajada.
+	# Bajada de entrada, y en el acto: el `set_deferred` que había aquí se
+	# ejecutaba al final del frame y pisaba cualquier `raise()` de ese mismo
+	# frame — el jugador que aparecía con la guardia pulsada la veía caerse.
+	monitorable = false
 
 	_parry_timer = Timer.new()
 	_parry_timer.one_shot = true
@@ -39,7 +46,8 @@ func _ready() -> void:
 ## Levanta la guardia y abre la ventana de parry.
 func raise(facing: int) -> void:
 	_facing = signi(facing) if facing != 0 else 1
-	monitorable = true
+	_raised = true
+	set_deferred("monitorable", true)
 	_parry_timer.start(parry_window)
 
 
@@ -52,16 +60,17 @@ func set_facing(facing: int) -> void:
 
 ## Baja la guardia.
 func lower() -> void:
-	monitorable = false
+	_raised = false
+	set_deferred("monitorable", false)
 	_parry_timer.stop()
 
 
 func is_raised() -> bool:
-	return monitorable
+	return _raised
 
 
 func is_in_parry_window() -> bool:
-	return monitorable and not _parry_timer.is_stopped()
+	return _raised and not _parry_timer.is_stopped()
 
 
 ## ¿Este golpe queda cubierto? **Consulta pura, sin efectos.** Se separó de
@@ -69,7 +78,7 @@ func is_in_parry_window() -> bool:
 ## fantasma en cuanto dos hitboxes consultaban la misma guardia en un frame, o
 ## alguien quería previsualizar sin aplicar.
 func covers(hitbox: Node) -> bool:
-	if not monitorable:
+	if not _raised:
 		return false
 	var point: Vector2 = hitbox.global_position if hitbox is Node2D else global_position
 	return _covers(point)

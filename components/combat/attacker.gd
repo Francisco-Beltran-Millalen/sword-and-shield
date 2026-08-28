@@ -33,22 +33,27 @@ signal lunge_requested(impulse: Vector2)
 
 ## Repertorio, en orden de encadenado.
 @export var attacks: Array[AttackData] = []
-## Quién reproduce las animaciones. Si se deja vacío se busca un hermano
-## llamado `AnimationPlayer`.
+## Quién reproduce las animaciones. Si se deja vacío se busca por nombre entre
+## los hermanos y, si no aparece, por tipo bajo la entidad.
 @export var animation_player: AnimationPlayer
-## Qué volumen inflige el daño. Si se deja vacío se busca un hermano `Hitbox`.
+## Qué volumen inflige el daño. Misma búsqueda que arriba. Asignarlo a mano
+## solo hace falta si la entidad tiene más de una hitbox.
 @export var hitbox: Hitbox
 
 var _index: int = 0
 var _chain_queued: bool = false
 var _busy: bool = false
+## Hacia dónde miraba quien pidió el ataque. Se guarda porque los golpes
+## encadenados no vuelven a preguntarlo: sin esto el segundo y el tercero
+## arremetían siempre a la derecha.
+var _facing: int = 1
 
 
 func _ready() -> void:
 	if animation_player == null:
-		animation_player = _find_sibling("AnimationPlayer") as AnimationPlayer
+		animation_player = _find_component("AnimationPlayer", "AnimationPlayer") as AnimationPlayer
 	if hitbox == null:
-		hitbox = _find_sibling("Hitbox") as Hitbox
+		hitbox = _find_component("Hitbox", "Hitbox") as Hitbox
 
 	if animation_player != null:
 		animation_player.animation_finished.connect(_on_animation_finished)
@@ -115,13 +120,14 @@ func close_window() -> void:
 func _start(facing: int) -> void:
 	_busy = true
 	_chain_queued = false
+	_facing = signi(facing) if facing != 0 else 1
 	var data := current_attack()
 	if data == null:
 		_busy = false
 		return
 
 	if data.lunge_speed > 0.0:
-		lunge_requested.emit(Vector2(float(signi(facing) if facing != 0 else 1) * data.lunge_speed, 0.0))
+		lunge_requested.emit(Vector2(float(_facing) * data.lunge_speed, 0.0))
 
 	attack_started.emit(data, _index)
 
@@ -143,7 +149,7 @@ func _finish() -> void:
 	if _chain_queued and _index + 1 < attacks.size():
 		_chain_queued = false
 		_index += 1
-		_start(1)
+		_start(_facing)
 		return
 
 	_chain_queued = false
@@ -152,11 +158,24 @@ func _finish() -> void:
 	chain_ended.emit()
 
 
-func _find_sibling(node_name: String) -> Node:
+## Busca una pieza de la entidad: primero un hermano con ese nombre, y si no
+## aparece, el primer nodo de ese tipo bajo la entidad.
+##
+## La segunda pasada existe porque la hitbox no siempre puede ser hermana. En el
+## enemigo cuelga del nodo de visuales, que es lo que se voltea al cambiar de
+## lado; una hitbox hija directa del `CharacterBody2D` no tendría desde dónde
+## voltearse y el bicho solo golpearía a la derecha. Buscar por tipo es lo que
+## permite que este componente sirva a estructuras de escena distintas, que es
+## justo lo que promete.
+func _find_component(node_name: String, type_name: String) -> Node:
 	var parent := get_parent()
 	if parent == null:
 		return null
-	return parent.get_node_or_null(node_name)
+	var direct := parent.get_node_or_null(node_name)
+	if direct != null:
+		return direct
+	var found := parent.find_children("*", type_name, true, false)
+	return found[0] if not found.is_empty() else null
 
 
 func _on_animation_finished(_anim: StringName) -> void:

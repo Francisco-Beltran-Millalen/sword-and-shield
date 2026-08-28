@@ -205,3 +205,27 @@ func test_girarse_mientras_bloquea_no_reabre_el_parry() -> void:
 	guard.set_facing(-1)
 	assert_false(guard.is_in_parry_window(),
 			"cambiar de lado no debe regalar una ventana de parry nueva")
+
+
+## --- Dirección del empuje ---
+
+func test_el_empuje_a_bocajarro_sigue_al_dueño_volteado() -> void:
+	# A quemarropa no hay vector entre cuerpos del que fiarse, así que la
+	# hitbox recurre a hacia dónde mira. `scale.x` es la escala LOCAL (siempre
+	# 1) y `global_scale.x` pierde el signo al descomponer la transform: con
+	# cualquiera de las dos, un golpe pegado empujaba siempre a la derecha.
+	var dueño := Node2D.new()
+	add_child_autofree(dueño)
+	dueño.scale.x = -1.0
+
+	var hitbox := HitboxScript.new() as Hitbox
+	dueño.add_child(hitbox)
+	var víctima := Node2D.new()
+	add_child_autofree(víctima)
+	await get_tree().process_frame
+
+	hitbox.global_position = Vector2(100.0, 0.0)
+	víctima.global_position = Vector2(100.0, 0.0)   ## alineados en X
+
+	assert_lt(hitbox.direction_to(víctima).x, 0.0,
+			"con el dueño volteado el empuje sale hacia la izquierda")

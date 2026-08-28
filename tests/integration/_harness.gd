@@ -41,8 +41,8 @@ func setup(spawn_a: Vector2 = DEFAULT_SPAWN_A, spawn_b: Vector2 = DEFAULT_SPAWN_
 	if with_floor:
 		_build_floor(floor_y)
 
-	sword_player = _build_player(0, "Espada", SwordKitScene)
-	shield_player = _build_player(1, "Escudo", ShieldKitScene)
+	sword_player = _build_player(0, "Espada")
+	shield_player = _build_player(1, "Escudo")
 
 	add_child(sword_player)
 	add_child(shield_player)
@@ -79,7 +79,7 @@ func settle_on_floor(max_frames: int = 120) -> void:
 			return
 
 
-func _build_player(index: int, label: String, _kit: PackedScene) -> Player:
+func _build_player(index: int, label: String) -> Player:
 	var player := PlayerScene.instantiate() as Player
 	player.player_index = index
 	player.display_name = label

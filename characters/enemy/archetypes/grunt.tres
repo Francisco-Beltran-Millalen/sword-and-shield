@@ -1,0 +1,23 @@
+[gd_resource type="Resource" script_class="EnemyArchetype" load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://characters/enemy/enemy_archetype.gd" id="1"]
+[ext_resource type="Resource" path="res://characters/enemy/archetypes/enemy_strike.tres" id="2"]
+
+[resource]
+script = ExtResource("1")
+display_name = "Recluta"
+body_size = Vector2(44, 44)
+body_color = Color(0.8, 0.28, 0.3, 1)
+max_health = 6
+invulnerability_seconds = 0.25
+defense = 1.0
+move_speed = 90.0
+acceleration = 900.0
+friction = 1200.0
+jump_velocity = -420.0
+detection_range = 260.0
+leash_range = 460.0
+patrol_radius = 180.0
+attacks = Array[Resource]([ExtResource("2")])
+attack_range = 52.0
+attack_cooldown = 1.1

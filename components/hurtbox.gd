@@ -39,6 +39,14 @@ func _ready() -> void:
 			push_warning("Hurtbox '%s' sin HealthComponent: asígnalo en el inspector o los i-frames no se respetarán." % name)
 
 
+## De quién es esta hurtbox. `owner` y no `get_parent()`: en golpes por zona la
+## hurtbox cuelga de un `Node2D` intermedio y el padre no es la entidad. Lo
+## necesita quien atribuya el golpe — un HUD, el aggro de un enemigo, el bus de
+## eventos.
+func entity() -> Node:
+	return owner if owner != null else get_parent()
+
+
 ## ¿Este impacto cuenta? Filtra por estado propio y por los i-frames del dueño.
 func accepts_hit(_hitbox: Node) -> bool:
 	if not active:

@@ -44,11 +44,6 @@ func on_action_pressed(_player: Node, _intent: PlayerIntent) -> void:
 	pass
 
 
-## Se soltó el botón de acción principal.
-func on_action_released(_player: Node) -> void:
-	pass
-
-
 ## El jugador recibió daño; el kit cancela lo que estuviera haciendo.
 func on_interrupted(_player: Node) -> void:
 	_set_busy(false)

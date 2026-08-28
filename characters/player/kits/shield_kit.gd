@@ -42,10 +42,6 @@ func tick(player: Node, intent: PlayerIntent, _delta: float) -> void:
 		_lower()
 
 
-func on_action_released(_player: Node) -> void:
-	_lower()
-
-
 func on_interrupted(player: Node) -> void:
 	_lower()
 	super.on_interrupted(player)

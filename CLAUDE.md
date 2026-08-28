@@ -44,13 +44,16 @@ importantes, ambas nacidas de deuda real del proyecto anterior:
   anterior el umbral "blando" dejó archivos de 1.000 líneas con párrafos explicando por
   qué podían crecer más.
 
-`docs/adr/ARCHITECTURE-MAP.md` se actualiza **en el mismo commit** que el código.
+`docs/adr/ARCHITECTURE-MAP.md` se actualiza **en el mismo commit** que el código. Ya no
+depende de acordarse: `tests/unit/test_architecture_map.gd` compara cada fila con el
+archivo real y falla en rojo si el mapa miente, si una clase de producción no está
+registrada o si alguien pasa de 400 líneas (§6).
 
 ---
 
 ## Trampa recurrente: verde no significa funcionando
 
-Ha pasado **tres veces** en este proyecto. Los tests pasaban y la funcionalidad no existía:
+Ha pasado **cuatro veces** en este proyecto. Los tests pasaban y la funcionalidad no existía:
 
 1. `room_scaffold.gd` no compilaba. Un error de parseo deja al nodo **sin script** sin
    romper la instanciación de la escena: las salas quedaban sin suelo y la suite seguía
@@ -59,15 +62,25 @@ Ha pasado **tres veces** en este proyecto. Los tests pasaban y la funcionalidad 
    espada no hacía daño. Los tests de `Hitbox` aislada pasaban igual.
 3. Faltaba que la `Hitbox` llamara a `Hurtbox.receive()`. La cadena quedaba abierta: la
    ventana se abría y el daño no llegaba a aplicarse nunca.
+4. `RoomScaffold` dibujaba el hueco de paso a 514 px del suelo y las plataformas a 401,
+   contra un salto de 101. Las dos zonas eran intransitables: el jugador caía en la
+   primera sala y no podía salir. El juego arrancaba sin un solo error y la suite daba
+   119/119, porque **ningún test conducía a un jugador por la geometría**.
 
 **Consecuencias prácticas:**
 
 - **GUT omite en silencio los scripts que no compilan** y aun así imprime *"All tests
   passed"*. La señal fiable es el conteo de **Scripts**, no el mensaje final.
 - Prueba recorridos completos, no piezas sueltas. `tests/integration/test_damage_chain.gd`
-  es el modelo: va de la intención al descuento de salud.
-- **Ejecuta el juego de verdad** antes de dar algo por terminado. Los tres fallos
-  aparecieron al lanzar host y cliente, no en la suite.
+  es el modelo: va de la intención al descuento de salud, y
+  `tests/integration/test_room_traversal.gd` conduce a un jugador real por la sala.
+- **Mide, no deduzcas.** El alcance del jugador se mide conduciéndolo, y la geometría se
+  compara contra esa medida. Tres diseños de escalera pasaron la aritmética y se atascaron
+  al pilotarlos: el desplazamiento lateral que cabe en un salto no es el que parece.
+- **Ejecuta el juego de verdad** antes de dar algo por terminado. Los tres primeros
+  fallos aparecieron al lanzar host y cliente, no en la suite. El cuarto ni siquiera:
+  arrancaba limpio en ambos extremos y solo salió al medir la geometría contra el
+  alcance del jugador.
 
 ---
 
@@ -95,6 +108,8 @@ components/          Reutilizables, sin conocer a su dueño
   hitbox · hurtbox · guard_box · health_component · stats_component · state_machine
 characters/player/   Player (orquestador delgado) · Locomotion · IntentSource
   kits/              PlayerKit (Nodo) → SwordKit · ShieldKit
+characters/enemy/    Enemy · EnemyArchetype (Resource) · AIIntentSource · Perception
+  archetypes/        Un .tres por tipo de enemigo
 level/systems/       Zone · RoomBounds · ZoneDoor · RoomScaffold (todos @tool)
 level/zones/         zone_verdant · zone_cinder (5 salas cuadradas cada una)
 systems/             world/ · network/ (lobby, session) · camera/
@@ -107,6 +122,18 @@ modificadores solo con `child_entered_tree` — desbloquear una habilidad es col
 `IntentSource` se sustituye por nodo, así que los tests conducen a un jugador real sin
 tocar `Input`.
 
+**El enemigo no estrena ningún sistema.** Usa `Locomotion`, `Attacker`, `Hitbox`,
+`Hurtbox`, `DamageReceiver`, stats y salud del jugador sin una línea añadida para él; lo
+único propio es `AIIntentSource`, que rellena el mismo `PlayerIntent` que el teclado. Si
+para meter una entidad nueva hiciera falta escribir movimiento o combate propios, el
+problema no es la entidad: son los sistemas, que estaban acoplados al jugador.
+
+**Un `class_name` nuevo no existe hasta que Godot reimporta.** Crear el archivo desde
+fuera del editor no lo registra en el caché de clases globales: los scripts que lo usan no
+compilan, el nodo se queda **sin script** y la escena se instancia igual. Tras añadir una
+clase, `godot --headless --import --path .`. Y para lanzar un script suelto hace falta
+`--path .`, o los autoloads no se registran y pasa lo mismo.
+
 **`GameEvents` no es un atajo.** Un evento entra ahí solo si emisor y receptor no pueden
 conocerse por el árbol. Si se conocen, va una señal local con `bind` — las condiciones
 están escritas en el propio archivo.
@@ -117,18 +144,15 @@ están escritas en el propio archivo.
 
 Por orden de lo que más desbloquea:
 
-1. **Enemigos.** `characters/enemy/` está vacía. El `EnemyArchetype` de
-   `../geometry-tension/characters/enemy/` es un `Resource` bien hecho y es el candidato a
-   portar. Su simulación debe ser **autoritativa en el host**, no por cliente.
-2. **HUD.** `ui/hud/` vacía. Sin él no se ve la salud ni por qué una puerta no se abre
+1. **HUD.** `ui/hud/` vacía. Sin él no se ve la salud ni por qué una puerta no se abre
    (`ZoneDoor` ya emite `waiting_changed`), lo que dificulta evaluar el juego en pruebas.
-3. **Progresión.** El mecanismo existe (`StatModifierNode`); faltan las habilidades y las
+2. **Progresión.** El mecanismo existe (`StatModifierNode`); faltan las habilidades y las
    puertas que las exijan.
-4. **Guardado.** No hay nada: ni `ResourceSaver`, ni `user://`. Es el corazón del género.
-5. **Mapa.**
-6. **Tileset y arte.** Todo son `Polygon2D`. `RoomScaffold` es geometría provisional y
+3. **Guardado.** No hay nada: ni `ResourceSaver`, ni `user://`. Es el corazón del género.
+4. **Mapa.**
+5. **Tileset y arte.** Todo son `Polygon2D`. `RoomScaffold` es geometría provisional y
    está marcado para retirarse cuando haya `TileMapLayer` con terrain sets.
-7. **Audio.** Nada.
+6. **Audio.** Nada.
 
 También pendientes, anotados con su disparador en `ARCHITECTURE-MAP.md` → *Deferred*:
 `tether_pressed` e `interact_pressed` viajan en el intent pero **nadie los consume** (el
