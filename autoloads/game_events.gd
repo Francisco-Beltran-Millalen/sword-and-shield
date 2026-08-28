@@ -49,8 +49,3 @@ signal hit_landed(attacker: Node, target: Node, damage: int)
 ## Un escudo bloqueó un golpe (parry incluido, distinguible por `perfect`).
 @warning_ignore("unused_signal")
 signal hit_guarded(guard: Node, attacker: Node, perfect: bool)
-
-## --- Sesión ---
-## Un jugador quedó fuera de combate. La escena de juego decide qué hacer.
-@warning_ignore("unused_signal")
-signal player_downed(player_index: int)

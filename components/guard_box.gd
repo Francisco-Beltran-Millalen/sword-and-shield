@@ -64,15 +64,20 @@ func is_in_parry_window() -> bool:
 	return monitorable and not _parry_timer.is_stopped()
 
 
-## ¿Este golpe queda cubierto? Debe venir del frente que la guardia protege.
-## La llama la hitbox atacante al entrar.
-func blocks(hitbox: Hitbox) -> bool:
+## ¿Este golpe queda cubierto? **Consulta pura, sin efectos.** Se separó de
+## `register_block` porque emitir la señal desde la pregunta producía bloqueos
+## fantasma en cuanto dos hitboxes consultaban la misma guardia en un frame, o
+## alguien quería previsualizar sin aplicar.
+func covers(hitbox: Node) -> bool:
 	if not monitorable:
 		return false
-	if not _covers(hitbox.global_position):
-		return false
+	var point: Vector2 = hitbox.global_position if hitbox is Node2D else global_position
+	return _covers(point)
+
+
+## Registra el bloqueo y avisa. La llama la hitbox tras confirmar con `covers`.
+func register_block(hitbox: Node) -> void:
 	blocked.emit(hitbox, is_in_parry_window())
-	return true
 
 
 func _covers(from_position: Vector2) -> bool:

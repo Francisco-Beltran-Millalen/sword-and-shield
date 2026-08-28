@@ -53,10 +53,10 @@ func _ready() -> void:
 	_rebuild()
 	if Engine.is_editor_hint():
 		return
-	collision_layer = 0
-	collision_mask = 1 << 1
+	# Capas configuradas en la escena, no aquí (§13).
 	body_entered.connect(_on_body_entered)
 	body_exited.connect(_on_body_exited)
+	add_to_group(&"zone_doors")
 
 
 ## Punto donde dejar a un jugador que llega por esta puerta.
@@ -101,14 +101,17 @@ func _get_configuration_warnings() -> PackedStringArray:
 		warnings.append("Sin `target_zone` la puerta no lleva a ninguna parte.")
 	if target_door == &"":
 		warnings.append("Asigna `target_door`: es la puerta por la que se aparece al llegar.")
+	if collision_mask == 0:
+		warnings.append("`collision_mask` a 0: nadie podrá activar la puerta. Marca la capa `player`.")
 	return warnings
 
 
+## Solo cuentan quienes viajan entre zonas. Se comprueba la pertenencia al
+## grupo, no el tipo: un NPC acompañante podría contar sin tocar esta clase.
 func _on_body_entered(body: Node2D) -> void:
-	var player := body as Player
-	if player == null:
+	if not body.is_in_group(&"zone_travellers"):
 		return
-	var id := player.get_instance_id()
+	var id := body.get_instance_id()
 	if _present.has(id):
 		return
 	_present.append(id)
@@ -119,8 +122,7 @@ func _on_body_entered(body: Node2D) -> void:
 
 
 func _on_body_exited(body: Node2D) -> void:
-	var player := body as Player
-	if player == null:
+	if not body.is_in_group(&"zone_travellers"):
 		return
-	_present.erase(player.get_instance_id())
+	_present.erase(body.get_instance_id())
 	waiting_changed.emit(_present.size(), required_players)

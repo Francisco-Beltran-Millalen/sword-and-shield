@@ -1,0 +1,13 @@
+[gd_resource type="Resource" script_class="AttackData" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://components/combat/attack_data.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+animation = &"attack_2"
+damage = 2
+knockback = 320.0
+attack_id = &"light"
+max_targets = 1
+lunge_speed = 150.0
+chains = true

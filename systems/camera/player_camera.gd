@@ -21,11 +21,17 @@ extends Camera2D
 @export var look_ahead_x: float = 40.0
 ## Suavidad del adelanto horizontal (mayor = más rápido).
 @export var look_ahead_speed: float = 3.0
+## A quién sigue. Vacío = el padre, que es el caso normal (la cámara cuelga de
+## su personaje). Explicitarlo permite encuadrar otra cosa —una cinemática, un
+## jefe— sin reparentar la cámara.
+@export var target: Node2D
 
 var _look_offset_x: float = 0.0
 
 
 func _ready() -> void:
+	if target == null:
+		target = get_parent() as Node2D
 	position_smoothing_enabled = true
 	position_smoothing_speed = 8.0
 	ignore_rotation = true
@@ -42,13 +48,18 @@ func set_local(is_local: bool) -> void:
 func _physics_process(delta: float) -> void:
 	if not enabled:
 		return
-	var body := get_parent() as CharacterBody2D
-	if body == null:
+	if target == null:
 		return
+	# El adelanto necesita saber hacia dónde va el objetivo. Se toma de
+	# `velocity` si la tiene (cualquier cuerpo la expone); si no, no se adelanta.
+	var speed_x := 0.0
+	var velocity_value: Variant = target.get(&"velocity")
+	if velocity_value is Vector2:
+		speed_x = (velocity_value as Vector2).x
 
 	var target_x := 0.0
-	if absf(body.velocity.x) > 20.0:
-		target_x = signf(body.velocity.x) * look_ahead_x
+	if absf(speed_x) > 20.0:
+		target_x = signf(speed_x) * look_ahead_x
 	_look_offset_x = move_toward(_look_offset_x, target_x, look_ahead_speed * look_ahead_x * delta)
 
 	offset = Vector2(_look_offset_x, look_ahead_y)

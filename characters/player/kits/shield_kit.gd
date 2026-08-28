@@ -95,8 +95,12 @@ func _resolve_facing(player: Node, intent: PlayerIntent) -> int:
 	return facing if facing != 0 else 1
 
 
-func _on_blocked(hitbox: Hitbox, perfect: bool) -> void:
-	GameEvents.hit_guarded.emit(self, hitbox, perfect)
+func _on_blocked(hitbox: Node, perfect: bool) -> void:
+	# Se emitía `(self, hitbox, …)`: el kit como guardia y la HITBOX como
+	# atacante. Cualquier consumidor habría recibido un volumen creyendo tener
+	# la entidad. Ahora van la guardia y el atacante de verdad.
+	var attacker: Node = hitbox.attacker() if hitbox.has_method("attacker") else null
+	GameEvents.hit_guarded.emit(guard_box, attacker, perfect)
 	if perfect:
 		return   ## El parry no empuja: esa es su recompensa.
 	if block_recoil > 0.0:

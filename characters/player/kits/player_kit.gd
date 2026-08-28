@@ -60,6 +60,13 @@ func animation_override() -> StringName:
 	return &""
 
 
+## Multiplicador de velocidad que impone el kit (guardia alta, arma pesada).
+## Está aquí, y no como duck typing en el anfitrión, para que el contrato del
+## kit se lea entero en un solo archivo.
+func speed_scale() -> float:
+	return 1.0
+
+
 func _set_busy(value: bool) -> void:
 	if _busy == value:
 		return

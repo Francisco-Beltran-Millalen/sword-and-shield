@@ -35,7 +35,7 @@ enum State {
 @onready var state_machine: StateMachine = $StateMachine
 @onready var locomotion: Locomotion = $Locomotion
 @onready var intent_source: IntentSource = $IntentSource
-@onready var hurtbox: Hurtbox = $Hurtbox
+@onready var damage_receiver: DamageReceiver = $DamageReceiver
 @onready var visuals: Node2D = $Visuals
 @onready var camera: PlayerCamera = $PlayerCamera
 
@@ -66,11 +66,15 @@ var replicated_facing: int:
 
 
 func _ready() -> void:
+	# Lo que hace de este cuerpo un viajero entre zonas es pertenecer al grupo,
+	# no ser un `Player`: así `ZoneDoor` no necesita conocer esta clase.
+	add_to_group(&"zone_travellers")
 	_setup_states()
 	health.health_changed.connect(_on_health_changed)
 	health.depleted.connect(_on_depleted)
 	health.revived.connect(_on_revived)
-	hurtbox.wounded.connect(_on_wounded)
+	damage_receiver.damage_taken.connect(_on_damage_taken)
+	damage_receiver.knockback_requested.connect(apply_impulse)
 	_bind_kit()
 	_apply_authority()
 
@@ -131,7 +135,7 @@ func _physics_process(delta: float) -> void:
 		_pending_impulse = Vector2.ZERO
 
 	var speed_scale := 1.0
-	if kit != null and kit.has_method("speed_scale"):
+	if kit != null:
 		speed_scale = kit.speed_scale()
 
 	locomotion.tick(self, stats, intent, delta, speed_scale)
@@ -258,21 +262,15 @@ func _settle_state() -> void:
 	state_machine.transition_to(State.IDLE if absf(velocity.x) < 8.0 else State.RUN)
 
 
-func _on_wounded(hitbox: Hitbox, _hit_position: Vector2) -> void:
-	var defense := stats.get_stat(StatsComponent.StatID.DEFENSE)
-	var amount := maxi(1, int(round(float(hitbox.damage) * defense)))
-	health.take_damage(amount, hitbox.attacker())
-
+## El daño ya lo calculó y aplicó `DamageReceiver` (defensa, salud, empuje).
+## Aquí solo queda la reacción propia del jugador: cortar lo que hiciera el kit
+## y entrar en aturdimiento.
+func _on_damage_taken(_amount: int, _from: Node, _hit_position: Vector2) -> void:
 	if health.is_dead:
 		return
-
-	var push := hitbox.direction_to(self) * hitbox.knockback \
-			* stats.get_stat(StatsComponent.StatID.KNOCKBACK_TAKEN)
-	apply_impulse(push)
 	if kit != null:
 		kit.on_interrupted(self)
 	state_machine.transition_to(State.HURT)
-	GameEvents.hit_landed.emit(hitbox.attacker(), self, amount)
 
 
 func _on_health_changed(current: int, maximum: int) -> void:
@@ -283,7 +281,6 @@ func _on_depleted(_source: Node) -> void:
 	if kit != null:
 		kit.on_interrupted(self)
 	state_machine.transition_to(State.DOWNED)
-	GameEvents.player_downed.emit(player_index)
 
 
 func _on_revived(_new_health: int) -> void:

@@ -12,9 +12,9 @@ extends Area2D
 ## `_get_configuration_warnings`), así que colocar salas es arrastrar y
 ## redimensionar, no calcular rectángulos a mano (§13).
 
-## Un jugador local entró en esta sala.
+## Entró un ocupante en esta sala (jugador, enemigo, NPC…).
 @warning_ignore("unused_signal")
-signal player_entered(room_id: StringName, player: Node)
+signal occupant_entered(room_id: StringName, occupant: Node)
 
 ## Identificador de la sala, único dentro de su zona. Lo usan las puertas y el
 ## sistema de guardado.
@@ -40,9 +40,8 @@ func _ready() -> void:
 	if Engine.is_editor_hint():
 		return
 	monitoring = true
-	# Solo detecta cuerpos en la capa `player`.
-	collision_layer = 0
-	collision_mask = 1 << 1
+	# Las capas se configuran en la escena, desde el inspector, donde tienen
+	# nombre (§13). Escribirlas aquí pisaba lo que el diseñador eligiera.
 	body_entered.connect(_on_body_entered)
 
 
@@ -87,13 +86,16 @@ func _get_configuration_warnings() -> PackedStringArray:
 		warnings.append("Asigna un `room_id`: las puertas y el guardado se refieren a la sala por él.")
 	if size.x < 320.0 or size.y < 240.0:
 		warnings.append("La sala es más pequeña que una pantalla; la cámara no tendrá recorrido.")
+	if collision_mask == 0:
+		warnings.append("`collision_mask` a 0: la sala no detectará a nadie. Marca las capas `player` / `enemy`.")
 	return warnings
 
 
+## Cualquier entidad puede habitar una sala. Solo se le avisa si le interesa
+## saberlo: se comprueba el MÉTODO, no el tipo, así que un enemigo o un NPC
+## participan sin que esta clase los conozca (§7).
 func _on_body_entered(body: Node2D) -> void:
-	var player := body as Player
-	if player == null or not player.is_local_player():
+	if not body.has_method("enter_room"):
 		return
-	# Llamada a la API pública del jugador, no escritura sobre su cámara (§2).
-	player.enter_room(room_id, world_rect())
-	player_entered.emit(room_id, player)
+	body.enter_room(room_id, world_rect())
+	occupant_entered.emit(room_id, body)

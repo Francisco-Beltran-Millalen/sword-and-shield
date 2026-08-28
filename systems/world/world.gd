@@ -25,7 +25,6 @@ var _changing_zone: bool = false
 
 func _ready() -> void:
 	spawner.spawn_function = _spawn_player
-	GameEvents.player_downed.connect(_on_player_downed)
 	NetworkManager.session_ended.connect(_on_session_ended)
 
 	_load_zone(FIRST_ZONE, &"")
@@ -118,23 +117,36 @@ func _spawn_player(data: Variant) -> Node:
 	player.set_owning_peer(peer_id)
 	player.equip_kit(SessionState.kit_scene_for(peer_id))
 
+	# El World creó a este jugador, así que se conecta a él directamente en vez
+	# de escuchar un evento global y luego buscarlo por índice. El autoload es
+	# para emisores y receptores que NO pueden conocerse por el árbol; aquí sí
+	# se conocen. `bind` lleva la referencia, sin búsquedas.
+	# Se toma el hijo, no `player.health`: ese accesor es `@onready` y el spawner
+	# ejecuta esta función ANTES de que el nodo entre en el árbol, así que
+	# todavía valdría `null`. Los hijos de la escena instanciada sí existen ya.
+	var health := player.get_node_or_null("HealthComponent") as HealthComponent
+	if health != null:
+		health.depleted.connect(_on_entity_downed.bind(player))
+
 	if current_zone != null:
 		player.position = current_zone.arrival_point() + Vector2(index * 80 - 40, -40)
 	return player
 
 
-func _on_player_downed(player_index: int) -> void:
-	# Provisional: reaparecer en la sala por defecto de la zona. El sistema de
-	# puntos de guardado llega con la progresión.
+## Provisional: reaparecer en la sala por defecto de la zona. El sistema de
+## puntos de guardado llega con la progresión.
+##
+## Recibe la entidad por `bind`, así que sirve igual para un enemigo que deba
+## reaparecer: no comprueba tipos ni busca por índice.
+func _on_entity_downed(_source: Node, entity: Node) -> void:
 	var timer := get_tree().create_timer(1.5)
 	await timer.timeout
-	for child in players_root.get_children():
-		var player := child as Player
-		if player != null and player.player_index == player_index:
-			player.revive_full()
-			if current_zone != null:
-				player.place_at(current_zone.arrival_point())
-			return
+	if not is_instance_valid(entity):
+		return
+	if entity.has_method("revive_full"):
+		entity.revive_full()
+	if current_zone != null and entity.has_method("place_at"):
+		entity.place_at(current_zone.arrival_point())
 
 
 func _on_session_ended(_reason: String) -> void:

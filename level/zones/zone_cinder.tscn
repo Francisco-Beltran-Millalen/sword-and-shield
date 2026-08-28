@@ -16,6 +16,8 @@ default_spawn_room = &"cinder_1"
 [node name="Room1" type="Node2D" parent="Rooms"]
 
 [node name="Bounds" type="Area2D" parent="Rooms/Room1"]
+collision_layer = 0
+collision_mask = 6
 script = ExtResource("2")
 room_id = &"cinder_1"
 size = Vector2(1280, 1280)
@@ -28,6 +30,8 @@ platform_rows = 2
 
 [node name="DoorToVerdant" type="Area2D" parent="Rooms/Room1"]
 position = Vector2(-544, 528)
+collision_layer = 0
+collision_mask = 2
 script = ExtResource("4")
 door_id = &"cinder_west"
 target_zone = "res://level/zones/zone_verdant.tscn"
@@ -39,6 +43,8 @@ required_players = 2
 position = Vector2(1280, 0)
 
 [node name="Bounds" type="Area2D" parent="Rooms/Room2"]
+collision_layer = 0
+collision_mask = 6
 script = ExtResource("2")
 room_id = &"cinder_2"
 size = Vector2(1280, 1280)
@@ -54,6 +60,8 @@ platform_rows = 3
 position = Vector2(1280, 1280)
 
 [node name="Bounds" type="Area2D" parent="Rooms/Room3"]
+collision_layer = 0
+collision_mask = 6
 script = ExtResource("2")
 room_id = &"cinder_3"
 size = Vector2(1280, 1280)
@@ -69,6 +77,8 @@ platform_rows = 3
 position = Vector2(2560, 1280)
 
 [node name="Bounds" type="Area2D" parent="Rooms/Room4"]
+collision_layer = 0
+collision_mask = 6
 script = ExtResource("2")
 room_id = &"cinder_4"
 size = Vector2(1280, 1280)
@@ -84,6 +94,8 @@ platform_rows = 2
 position = Vector2(2560, 2560)
 
 [node name="Bounds" type="Area2D" parent="Rooms/Room5"]
+collision_layer = 0
+collision_mask = 6
 script = ExtResource("2")
 room_id = &"cinder_5"
 size = Vector2(1280, 1280)

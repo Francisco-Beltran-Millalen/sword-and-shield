@@ -27,13 +27,20 @@ func _ready() -> void:
 	monitoring = false   ## No busca: la encuentran.
 	monitorable = true
 	if health_component == null:
-		var owner_node := get_parent()
-		if owner_node != null:
-			health_component = owner_node.get_node_or_null("HealthComponent") as HealthComponent
+		# `owner` (la raíz de la escena) y no `get_parent()`: una hurtbox por
+		# zona cuelga de un Node2D intermedio, y buscar en el padre no
+		# encontraba nada —aceptando entonces TODOS los golpes e ignorando los
+		# i-frames, en silencio. Ese caso por zonas es justo el que promete el
+		# campo `zone` de más abajo.
+		var host: Node = owner if owner != null else get_parent()
+		if host != null:
+			health_component = host.get_node_or_null("HealthComponent") as HealthComponent
+		if health_component == null:
+			push_warning("Hurtbox '%s' sin HealthComponent: asígnalo en el inspector o los i-frames no se respetarán." % name)
 
 
 ## ¿Este impacto cuenta? Filtra por estado propio y por los i-frames del dueño.
-func accepts_hit(_hitbox: Hitbox) -> bool:
+func accepts_hit(_hitbox: Node) -> bool:
 	if not active:
 		return false
 	if health_component != null:
@@ -43,7 +50,7 @@ func accepts_hit(_hitbox: Hitbox) -> bool:
 
 
 ## La llama la hitbox atacante a través del resolutor de daño.
-func receive(hitbox: Hitbox, hit_position: Vector2) -> void:
+func receive(hitbox: Node, hit_position: Vector2) -> void:
 	if not accepts_hit(hitbox):
 		return
 	wounded.emit(hitbox, hit_position)

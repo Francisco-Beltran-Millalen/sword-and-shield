@@ -1,0 +1,117 @@
+[gd_resource type="AnimationLibrary" load_steps=4 format=3]
+
+; Animaciones del kit de espada.
+;
+; Las pistas de método hablan con el `Attacker` (`open_window` / `close_window`),
+; no con la hitbox. Así esta biblioteca sirve para cualquier entidad que tenga
+; un nodo `Attacker` junto a su `AnimationPlayer`, sin importar dónde coloque
+; su hitbox. El *cuándo* del golpe vive aquí; el *qué* en los AttackData.
+
+[sub_resource type="Animation" id="Anim_attack_1"]
+resource_name = "attack_1"
+length = 0.32
+step = 0.02
+tracks/0/type = "method"
+tracks/0/imported = false
+tracks/0/enabled = true
+tracks/0/path = NodePath("Attacker")
+tracks/0/interp = 1
+tracks/0/loop_wrap = true
+tracks/0/keys = {
+"times": PackedFloat32Array(0.1, 0.2),
+"transitions": PackedFloat32Array(1, 1),
+"values": [{
+"args": [],
+"method": &"open_window"
+}, {
+"args": [],
+"method": &"close_window"
+}]
+}
+tracks/1/type = "value"
+tracks/1/imported = false
+tracks/1/enabled = true
+tracks/1/path = NodePath("Blade:rotation")
+tracks/1/interp = 2
+tracks/1/loop_wrap = true
+tracks/1/keys = {
+"times": PackedFloat32Array(0, 0.1, 0.22, 0.32),
+"transitions": PackedFloat32Array(1, 1, 1, 1),
+"update": 0,
+"values": [-0.6, -0.9, 0.7, 0.0]
+}
+
+[sub_resource type="Animation" id="Anim_attack_2"]
+resource_name = "attack_2"
+length = 0.3
+step = 0.02
+tracks/0/type = "method"
+tracks/0/imported = false
+tracks/0/enabled = true
+tracks/0/path = NodePath("Attacker")
+tracks/0/interp = 1
+tracks/0/loop_wrap = true
+tracks/0/keys = {
+"times": PackedFloat32Array(0.08, 0.18),
+"transitions": PackedFloat32Array(1, 1),
+"values": [{
+"args": [],
+"method": &"open_window"
+}, {
+"args": [],
+"method": &"close_window"
+}]
+}
+tracks/1/type = "value"
+tracks/1/imported = false
+tracks/1/enabled = true
+tracks/1/path = NodePath("Blade:rotation")
+tracks/1/interp = 2
+tracks/1/loop_wrap = true
+tracks/1/keys = {
+"times": PackedFloat32Array(0, 0.08, 0.2, 0.3),
+"transitions": PackedFloat32Array(1, 1, 1, 1),
+"update": 0,
+"values": [0.7, 0.9, -0.7, 0.0]
+}
+
+[sub_resource type="Animation" id="Anim_attack_3"]
+resource_name = "attack_3"
+length = 0.46
+step = 0.02
+tracks/0/type = "method"
+tracks/0/imported = false
+tracks/0/enabled = true
+tracks/0/path = NodePath("Attacker")
+tracks/0/interp = 1
+tracks/0/loop_wrap = true
+tracks/0/keys = {
+"times": PackedFloat32Array(0.16, 0.32),
+"transitions": PackedFloat32Array(1, 1),
+"values": [{
+"args": [],
+"method": &"open_window"
+}, {
+"args": [],
+"method": &"close_window"
+}]
+}
+tracks/1/type = "value"
+tracks/1/imported = false
+tracks/1/enabled = true
+tracks/1/path = NodePath("Blade:rotation")
+tracks/1/interp = 2
+tracks/1/loop_wrap = true
+tracks/1/keys = {
+"times": PackedFloat32Array(0, 0.16, 0.34, 0.46),
+"transitions": PackedFloat32Array(1, 1, 1, 1),
+"update": 0,
+"values": [0.0, -1.4, 1.2, 0.0]
+}
+
+[resource]
+_data = {
+"attack_1": SubResource("Anim_attack_1"),
+"attack_2": SubResource("Anim_attack_2"),
+"attack_3": SubResource("Anim_attack_3")
+}

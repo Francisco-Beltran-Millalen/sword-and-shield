@@ -1,100 +1,71 @@
 class_name SwordKit
 extends PlayerKit
 
-## Kit ofensivo. El ataque es una animación, no un contador de frames.
+## Kit ofensivo. Traduce la intención del jugador a peticiones al `Attacker`.
 ##
-## La ventana activa la abren y cierran pistas de método del `AnimationPlayer`
-## llamando a `Hitbox.enable()` y `Hitbox.disable()` en los frames exactos
-## (§13). Este script no cuenta frames: solo lanza la animación y escucha
-## cuándo termina.
+## El combo, las ventanas de daño y las animaciones **no viven aquí**: son del
+## `Attacker`, que es un componente que también usarán enemigos y trampas. Este
+## script solo hace de puente entre el intent del jugador y ese componente, y
+## reenvía hacia arriba lo que ocurra.
 ##
-## Encadenado: si se pulsa de nuevo dentro de la ventana de encadenado, el
-## siguiente golpe del combo sale; si no, la cadena se reinicia.
+## Que quede tan corto es la señal de que la abstracción está en su sitio: si
+## mañana un enemigo necesita el mismo combo de tres golpes, reutiliza el
+## `Attacker` y sus `AttackData`, no este archivo.
 
-## Nombres de las animaciones del combo, en orden.
-@export var combo_animations: Array[StringName] = [&"attack_1", &"attack_2", &"attack_3"]
-## Impulso hacia delante al iniciar cada golpe.
-@export var lunge_speed: float = 140.0
-
-@onready var hitbox: Hitbox = $Hitbox
-@onready var animation: AnimationPlayer = $AnimationPlayer
-
-var _combo_index: int = 0
-var _chain_queued: bool = false
+@onready var attacker: Attacker = $Attacker
 
 
 func _ready() -> void:
 	kit_id = &"sword"
 	display_name = "Espada"
-	if animation != null and not animation.animation_finished.is_connected(_on_animation_finished):
-		animation.animation_finished.connect(_on_animation_finished)
+	if attacker == null:
+		push_error("SwordKit necesita un nodo Attacker.")
+		return
+	attacker.attack_started.connect(_on_attack_started)
+	attacker.chain_ended.connect(_on_chain_ended)
+	attacker.lunge_requested.connect(_on_lunge_requested)
+	attacker.hit_landed.connect(_on_hit_landed)
 
 
 func on_action_pressed(player: Node, intent: PlayerIntent) -> void:
-	if is_busy():
-		_chain_queued = true
+	if attacker == null:
 		return
-	_start_swing(player, intent)
-
-
-func tick(_player: Node, _intent: PlayerIntent, _delta: float) -> void:
-	pass
+	attacker.attack(_resolve_facing(player, intent))
 
 
 func on_interrupted(player: Node) -> void:
-	_chain_queued = false
-	_combo_index = 0
-	if hitbox != null:
-		hitbox.disable()
-	if animation != null:
-		animation.stop()
+	if attacker != null:
+		attacker.interrupt()
 	super.on_interrupted(player)
 
 
 func animation_override() -> StringName:
-	return _current_animation() if is_busy() else &""
+	if attacker == null or not attacker.is_attacking():
+		return &""
+	var data := attacker.current_attack()
+	return data.animation if data != null else &""
 
 
-func _start_swing(player: Node, intent: PlayerIntent) -> void:
-	_set_busy(true)
-	_chain_queued = false
-
+func _resolve_facing(player: Node, intent: PlayerIntent) -> int:
 	var facing: int = intent.facing()
 	if facing == 0 and player.has_method("get_facing"):
 		facing = player.get_facing()
-	if facing == 0:
-		facing = 1
-	scale.x = float(facing)
-
-	if lunge_speed > 0.0:
-		impulse_requested.emit(Vector2(float(facing) * lunge_speed, 0.0))
-
-	var anim := _current_animation()
-	if animation != null and animation.has_animation(anim):
-		animation.play(anim)
-	else:
-		# Sin animación todavía (arte pendiente): el kit no se queda colgado.
-		push_warning("SwordKit: falta la animación '%s'; se resuelve al instante." % anim)
-		_finish_swing()
+	return facing if facing != 0 else 1
 
 
-func _current_animation() -> StringName:
-	if combo_animations.is_empty():
-		return &"attack_1"
-	return combo_animations[_combo_index % combo_animations.size()]
+func _on_attack_started(_data: AttackData, _index: int) -> void:
+	_set_busy(true)
 
 
-func _on_animation_finished(_anim_name: StringName) -> void:
-	_finish_swing()
-
-
-func _finish_swing() -> void:
-	if hitbox != null:
-		hitbox.disable()
-	if _chain_queued:
-		_combo_index += 1
-		_chain_queued = false
-		_set_busy(false)
-		return
-	_combo_index = 0
+func _on_chain_ended() -> void:
 	_set_busy(false)
+
+
+func _on_lunge_requested(impulse: Vector2) -> void:
+	# El kit no mueve al jugador: reenvía la petición hacia arriba (§2).
+	impulse_requested.emit(Vector2(impulse.x * signf(scale.x if scale.x != 0.0 else 1.0), impulse.y))
+
+
+func _on_hit_landed(hurtbox: Hurtbox, _position: Vector2, data: AttackData) -> void:
+	var target := hurtbox.get_parent()
+	GameEvents.hit_landed.emit(get_parent(), target, data.damage if data != null else 0)

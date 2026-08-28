@@ -1,4 +1,4 @@
-[gd_scene load_steps=12 format=3]
+[gd_scene load_steps=13 format=3]
 
 [ext_resource type="Script" path="res://characters/player/player.gd" id="1"]
 [ext_resource type="Script" path="res://components/stats_component.gd" id="2"]
@@ -8,6 +8,7 @@
 [ext_resource type="Script" path="res://characters/player/local_intent_source.gd" id="6"]
 [ext_resource type="Script" path="res://components/hurtbox.gd" id="7"]
 [ext_resource type="Script" path="res://systems/camera/player_camera.gd" id="8"]
+[ext_resource type="Script" path="res://components/combat/damage_receiver.gd" id="9"]
 
 [sub_resource type="RectangleShape2D" id="BodyShape"]
 size = Vector2(28, 44)
@@ -66,6 +67,9 @@ script = ExtResource("7")
 [node name="CollisionShape2D" type="CollisionShape2D" parent="Hurtbox"]
 position = Vector2(0, -22)
 shape = SubResource("HurtShape")
+
+[node name="DamageReceiver" type="Node" parent="."]
+script = ExtResource("9")
 
 [node name="Visuals" type="Node2D" parent="."]
 

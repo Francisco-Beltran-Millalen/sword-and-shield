@@ -30,22 +30,40 @@ signal guarded(guard: GuardBox, hit_position: Vector2)
 ## Cuántas víctimas distintas puede tocar una misma activación. 1 = golpe único.
 @export var max_targets: int = 1
 
+## Quién asesta el golpe. Vacío = se deduce (ver `attacker()`). Explicitarlo es
+## lo que permite que ataque algo que no es un cuerpo cinemático: una trampa
+## estática, una torreta, un proyectil.
+@export var source: Node
+
 var _touched: Array[int] = []
 var _attacker: Node = null
 
 
-## Quién asesta el golpe: el primer `CharacterBody2D` por encima en el árbol.
-## No se usa `owner` — en Godot esa propiedad es el nodo raíz de la escena donde
-## se guardó el nodo, que no tiene por qué ser el atacante.
+## Quién asesta el golpe, para atribuir el daño.
+##
+## Orden: `source` si se asignó; si no, `owner` (la raíz de la escena donde vive
+## esta hitbox, que en una trampa o un proyectil ES el atacante); y como último
+## recurso el primer padre del grupo `combat_source`.
+##
+## Antes esto exigía un `CharacterBody2D` por encima, lo que dejaba fuera a toda
+## entidad que no fuera un cuerpo cinemático — y fallaba en silencio,
+## atribuyendo el daño a `null`.
 func attacker() -> Node:
 	if _attacker != null and is_instance_valid(_attacker):
 		return _attacker
+	if source != null:
+		_attacker = source
+		return _attacker
+	if owner != null:
+		_attacker = owner
+		return _attacker
 	var node: Node = get_parent()
 	while node != null:
-		if node is CharacterBody2D:
+		if node.is_in_group(&"combat_source"):
 			_attacker = node
 			return _attacker
 		node = node.get_parent()
+	push_warning("Hitbox sin atacante identificable: asigna `source` o marca al dueño en el grupo `combat_source`.")
 	return null
 
 
@@ -85,16 +103,24 @@ func _on_area_entered(area: Area2D) -> void:
 	if _touched.size() >= max_targets:
 		return
 
-	var guard := area as GuardBox
-	if guard != null:
-		if guard.blocks(self):
-			_touched.append(area.get_instance_id())
-			guarded.emit(guard, area.global_position)
-			return
+	# Se pregunta por el CONTRATO, no por la clase. Así una barrera destructible,
+	# una armadura por piezas o un escudo de jefe participan sin que haya que
+	# tocar este archivo (§7).
+	if area.has_method("covers") and area.covers(self):
+		_touched.append(area.get_instance_id())
+		if area.has_method("register_block"):
+			area.register_block(self)
+		guarded.emit(area, area.global_position)
+		return
 
-	var hurtbox := area as Hurtbox
-	if hurtbox == null or not hurtbox.accepts_hit(self):
+	if not area.has_method("accepts_hit") or not area.accepts_hit(self):
 		return
 
 	_touched.append(area.get_instance_id())
-	hit.emit(hurtbox, area.global_position)
+	# Se avisa a la víctima por su API pública (§2: llamar un método, no escribir
+	# su estado). Sin esta línea la cadena quedaba abierta: la hitbox detectaba
+	# el contacto y emitía `hit` para su dueño, pero la hurtbox nunca emitía
+	# `wounded`, así que el daño no llegaba a aplicarse nunca.
+	if area.has_method("receive"):
+		area.receive(self, area.global_position)
+	hit.emit(area, area.global_position)
