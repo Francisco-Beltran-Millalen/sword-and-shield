@@ -1,0 +1,28 @@
+[gd_scene load_steps=4 format=3]
+
+[ext_resource type="Script" path="res://characters/player/kits/sword_kit.gd" id="1"]
+[ext_resource type="Script" path="res://components/hitbox.gd" id="2"]
+
+[sub_resource type="RectangleShape2D" id="BladeShape"]
+size = Vector2(38, 26)
+
+[node name="Kit" type="Node2D"]
+script = ExtResource("1")
+
+[node name="Hitbox" type="Area2D" parent="."]
+position = Vector2(26, -24)
+collision_layer = 8
+collision_mask = 192
+script = ExtResource("2")
+damage = 2
+knockback = 340.0
+attack_id = &"light"
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="Hitbox"]
+shape = SubResource("BladeShape")
+
+[node name="AnimationPlayer" type="AnimationPlayer" parent="."]
+
+[node name="Blade" type="Polygon2D" parent="."]
+color = Color(0.85, 0.86, 0.9, 1)
+polygon = PackedVector2Array(10, -28, 44, -25, 44, -21, 10, -20)
