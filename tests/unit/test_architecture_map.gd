@@ -18,7 +18,7 @@ const TOPE_DE_LINEAS := 400
 ## Dónde vive el código de producción. `tests/` y `addons/` quedan fuera.
 const RAICES: Array[String] = [
 	"res://autoloads", "res://characters", "res://components",
-	"res://level", "res://systems",
+	"res://level", "res://systems", "res://ui",
 ]
 
 var _filas: Dictionary = {}

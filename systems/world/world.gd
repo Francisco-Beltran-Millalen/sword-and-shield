@@ -18,6 +18,7 @@ const FIRST_ZONE := "res://level/zones/zone_verdant.tscn"
 @onready var players_root: Node2D = $Players
 @onready var zone_root: Node2D = $ZoneRoot
 @onready var spawner: MultiplayerSpawner = $PlayerSpawner
+@onready var hud: Hud = $Hud
 
 var current_zone: Zone
 var _changing_zone: bool = false
@@ -42,6 +43,15 @@ func _unhandled_input(event: InputEvent) -> void:
 ## Carga una zona y descarga la anterior. La zona es la unidad de carga: dentro
 ## de ella no se vuelve a cargar nada.
 func _load_zone(zone_path: String, from_door: StringName) -> void:
+	# El aviso de puerta no puede sobrevivir a la puerta que lo pidió: un `Area2D`
+	# que sale del árbol suelta sus `body_exited`, así que la puerta moribunda
+	# emitiría un último `waiting_changed` que llegaría ya en la zona nueva, donde
+	# no hay nada que lo apague. Se corta la conexión antes de destruirla.
+	if current_zone != null:
+		for door in current_zone.doors():
+			door.waiting_changed.disconnect(hud.set_door_wait)
+	hud.set_door_wait(0, 0)
+
 	for child in zone_root.get_children():
 		zone_root.remove_child(child)
 		child.queue_free()
@@ -59,6 +69,7 @@ func _load_zone(zone_path: String, from_door: StringName) -> void:
 
 	for door in current_zone.doors():
 		door.traversal_requested.connect(_on_traversal_requested)
+		door.waiting_changed.connect(hud.set_door_wait)
 
 	GameEvents.zone_entered.emit(current_zone.zone_id)
 	_place_players(current_zone.arrival_point(from_door))
@@ -112,6 +123,15 @@ func _spawn_all() -> void:
 		spawner.spawn({"peer": peers[index], "index": index})
 
 
+## ¿Es este el peer que manda sobre ese personaje? Se pregunta desde el `World`,
+## que sí está en el árbol: `Node.multiplayer` vale `null` fuera de él, así que
+## el mismo cálculo hecho sobre un jugador recién instanciado reventaría.
+func _is_own_peer(peer_id: int) -> bool:
+	if not multiplayer.has_multiplayer_peer():
+		return true
+	return peer_id == multiplayer.get_unique_id()
+
+
 ## La ejecuta el spawner en TODOS los peers con los datos que envió el host.
 func _spawn_player(data: Variant) -> Node:
 	var info: Dictionary = data
@@ -135,6 +155,24 @@ func _spawn_player(data: Variant) -> Node:
 	var health := player.get_node_or_null("HealthComponent") as HealthComponent
 	if health != null:
 		health.depleted.connect(_on_entity_downed.bind(player))
+
+	# Qué ranura del HUD ocupa este jugador. Se decide aquí y no en el HUD porque
+	# el peer que manda sobre el personaje es un dato de la sesión, no de la
+	# interfaz: el HUD recibe un entero y no pregunta nada a nadie (§5).
+	var slot := Hud.Slot.SELF if _is_own_peer(peer_id) else Hud.Slot.PARTNER
+	hud.set_slot_label(player.display_name, slot)
+	if health != null:
+		# Al `HealthComponent` y no al `Player`, que reemite la misma señal: el
+		# `Player` la conecta en su `_ready`, y el `_ready` de un hijo corre ANTES
+		# que el del padre, así que la emisión inicial del componente ya ha pasado
+		# cuando el `Player` se suscribe. Enganchado ahí, el HUD se quedaría a cero
+		# hasta el primer golpe y luego pegaría un salto. Aquí seguimos fuera del
+		# árbol —nadie ha hecho `_ready` todavía—, así que no se pierde ninguna.
+		health.health_changed.connect(hud.set_health.bind(slot))
+	# Un jugador que se desconecta se lleva su ranura: el `MultiplayerSpawner`
+	# despacha al personaje remoto y su barra se quedaría clavada en el último
+	# valor que llegó a verse.
+	player.tree_exiting.connect(hud.clear_slot.bind(slot))
 
 	if current_zone != null:
 		player.position = current_zone.arrival_point() + Vector2(index * 80 - 40, -40)

@@ -77,6 +77,14 @@ Ha pasado **cuatro veces** en este proyecto. Los tests pasaban y la funcionalida
 - **Mide, no deduzcas.** El alcance del jugador se mide conduciéndolo, y la geometría se
   compara contra esa medida. Tres diseños de escalera pasaron la aritmética y se atascaron
   al pilotarlos: el desplazamiento lateral que cabe en un salto no es el que parece.
+- **Quien se suscribe tarde no ve el primer valor.** El `_ready` de un hijo corre antes
+  que el del padre, así que la emisión inicial de un componente ya ha pasado cuando el
+  padre se conecta a él: `HealthComponent` emite su `health_changed` en el `_ready`
+  (`health_component.gd`) y `Player` se suscribe en el suyo, o sea después. Por eso el
+  `World` engancha el HUD al **componente** y **antes** de meter al jugador en el árbol.
+  Enganchado al `Player`, la barra se queda a cero hasta el primer golpe — y un test que
+  solo compruebe "recibe daño y baja" pasa igual. `test_hud.gd` afirma el valor inicial
+  justamente por eso.
 - **Ejecuta el juego de verdad** antes de dar algo por terminado. Los tres primeros
   fallos aparecieron al lanzar host y cliente, no en la suite. El cuarto ni siquiera:
   arrancaba limpio en ambos extremos y solo salió al medir la geometría contra el
@@ -113,6 +121,7 @@ characters/enemy/    Enemy · EnemyArchetype (Resource) · AIIntentSource · Per
 level/systems/       Zone · RoomBounds · ZoneDoor · RoomScaffold (todos @tool)
 level/zones/         zone_verdant · zone_cinder (5 salas cuadradas cada una)
 systems/             world/ · network/ (lobby, session) · camera/
+ui/hud/              Hud — capa de solo lectura; el World le empuja, no pregunta
 autoloads/           NetworkManager · GameEvents · SessionState
 ```
 
@@ -144,8 +153,10 @@ están escritas en el propio archivo.
 
 Por orden de lo que más desbloquea:
 
-1. **HUD.** `ui/hud/` vacía. Sin él no se ve la salud ni por qué una puerta no se abre
-   (`ZoneDoor` ya emite `waiting_changed`), lo que dificulta evaluar el juego en pruebas.
+1. **HUD — esqueleto puesto, contenido no.** `Hud` ya muestra la salud de los dos
+   jugadores y por qué una puerta no se abre. Faltan el estado del kit (guardia, combo),
+   las habilidades desbloqueadas, la pantalla de derrota y cualquier arte: todo son
+   `ProgressBar` y `Label` desnudos.
 2. **Progresión.** El mecanismo existe (`StatModifierNode`); faltan las habilidades y las
    puertas que las exijan.
 3. **Guardado.** No hay nada: ni `ResourceSaver`, ni `user://`. Es el corazón del género.

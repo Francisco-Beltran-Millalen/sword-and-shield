@@ -28,8 +28,8 @@ res:// (project.godot)
 │   │   ├── archetypes/                       # Composición de comportamiento
 │   │   └── locomotion/                       # Motores de movimiento
 │   ├── systems/camera/camera_rig.tscn        # Coordinación de cámara (2 jugadores)
-│   └── systems/network/                      # Replicación (MultiplayerSpawner/Synchronizer)
-├── ui/hud/hud.tscn                           # Capa UI, solo lectura
+│   ├── systems/network/                      # Replicación (MultiplayerSpawner/Synchronizer)
+│   └── ui/hud/hud.tscn                       # Capa UI, solo lectura: el coordinador le EMPUJA (§5)
 ├── ui/debug/                                 # Overlays de depuración
 └── autoloads/*.gd                            # Singletons (no están en el árbol de escena)
 ```
