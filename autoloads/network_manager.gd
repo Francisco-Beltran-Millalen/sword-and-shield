@@ -18,16 +18,30 @@ signal game_ready(is_host: bool)
 signal session_ended(reason: String)
 ## No se pudo establecer la conexión.
 signal connection_error(message: String)
+## Todos los peers tienen ya montada su escena: se puede empezar a replicar.
+signal all_peers_ready()
 
 const DEFAULT_PORT: int = 4242
 ## Estrictamente dos jugadores: host + un peer.
 const MAX_PEERS: int = 1
+## Cuánto se espera a que el otro extremo acuse su carga antes de rendirse.
+## Generoso a propósito: cubre una carga lenta, no una red lenta.
+const READY_TIMEOUT_SECONDS: float = 15.0
 
+# ephemeral: todo el estado de abajo dura lo que la sesión y lo vacía `reset()`.
 var is_host_mode: bool = false
 var is_active: bool = false
 var port: int = DEFAULT_PORT
 
 var _last_join_ip: String = ""
+## Quién ha acusado ya su carga en la ronda en curso. Es un conjunto y no una
+## lista: con una lista, un peer que reporta dos veces —y puede, si dos cargas
+## se solapan— completaría el acuse él solo comparando tamaños, que es
+## exactamente el fallo que esto viene a impedir.
+var _peers_ready: Dictionary = {}
+## Corta la espera si alguien no acusa nunca. Sin esto el otro extremo se queda
+## mirando un mundo vacío para siempre y sin un mensaje.
+var _ready_timeout: SceneTreeTimer = null
 ## Se echa el pestillo en cuanto se emite el arranque de partida. Un
 ## `peer_connected` duplicado o tardío (habitual cuando un cliente ya estaba
 ## intentando conectar antes de que el host existiera) no debe disparar un
@@ -80,6 +94,8 @@ func reset() -> void:
 	is_host_mode = false
 	_game_started = false
 	_last_join_ip = ""
+	_peers_ready.clear()
+	_cancel_ready_timeout()
 
 
 ## Cierra la sesión y avisa. Quien escuche `session_ended` decide a qué escena ir.
@@ -142,9 +158,92 @@ func _disconnect_signals() -> void:
 
 @rpc("authority", "call_local", "reliable")
 func _start_game() -> void:
-	if multiplayer.is_server():
-		# El cliente recibe este RPC y encola su carga de escena ANTES de que el
-		# host cargue la suya. Así el cliente ya tiene la escena en el árbol
-		# cuando los MultiplayerSynchronizer del host registran su caché de rutas.
-		await get_tree().process_frame
+	# Antes el host esperaba aquí un `process_frame` confiando en que para
+	# entonces el cliente ya habría cargado. Eso solo es cierto si el viaje de
+	# ida cabe en 16 ms, o sea en localhost: con latencia de verdad el host
+	# hacía aparecer a los jugadores antes de que el cliente tuviera el árbol, y
+	# el cliente ENTRABA A LA PARTIDA SIN NINGÚN PERSONAJE —los spawns son de una
+	# sola vez y no se reintentan—. Ahora nadie apuesta: se acusa la carga.
 	game_ready.emit(multiplayer.is_server())
+
+
+## --- Acuse de carga ---
+##
+## Nada replicado —los spawns del `MultiplayerSpawner`, sobre todo— puede salir
+## hasta que TODOS los peers tengan su escena montada. Vive aquí y no en el
+## `World` por dos razones: es estado de sesión y `reset()` lo limpia (§9), y
+## sobre todo un autoload existe en ambos extremos aunque el `World` del otro
+## todavía no, que es justo el caso que se está ordenando.
+
+
+## Este peer ya tiene montada su escena de juego. La llama quien la monta.
+##
+## Sin sesión de red contesta en el acto: no se pregunta por peers ni por
+## `has_multiplayer_peer()` —que devuelve `true` incluso sin sesión— sino por
+## `is_active`, que es el dato del que este nodo es dueño.
+func report_scene_ready() -> void:
+	if not is_active:
+		all_peers_ready.emit()
+		return
+	if multiplayer.is_server():
+		_register_ready(1)
+	else:
+		_arm_ready_timeout()
+		_rpc_peer_ready.rpc_id(1)
+
+
+## Lo recibe solo el host. Sin `call_local`: el host se apunta llamando
+## directamente, y así el cliente no recibe también el acuse ajeno.
+@rpc("any_peer", "reliable")
+func _rpc_peer_ready() -> void:
+	if not multiplayer.is_server():
+		return
+	_register_ready(multiplayer.get_remote_sender_id())
+
+
+func _register_ready(peer_id: int) -> void:
+	_peers_ready[peer_id] = true
+	_arm_ready_timeout()
+	for expected in _expected_peers():
+		if not _peers_ready.has(expected):
+			return
+	# La ronda se cierra y el conjunto queda vacío para la siguiente: el mismo
+	# mecanismo sirve para el arranque y para cada carga posterior.
+	_peers_ready.clear()
+	_cancel_ready_timeout()
+	_rpc_all_ready.rpc()
+
+
+@rpc("authority", "call_local", "reliable")
+func _rpc_all_ready() -> void:
+	_cancel_ready_timeout()
+	all_peers_ready.emit()
+
+
+func _expected_peers() -> Array[int]:
+	var expected: Array[int] = [1]
+	for peer in multiplayer.get_peers():
+		expected.append(peer)
+	return expected
+
+
+func _arm_ready_timeout() -> void:
+	_cancel_ready_timeout()
+	_ready_timeout = get_tree().create_timer(READY_TIMEOUT_SECONDS)
+	_ready_timeout.timeout.connect(_on_ready_timeout)
+
+
+func _cancel_ready_timeout() -> void:
+	if _ready_timeout != null and _ready_timeout.timeout.is_connected(_on_ready_timeout):
+		_ready_timeout.timeout.disconnect(_on_ready_timeout)
+	_ready_timeout = null
+
+
+## Rendirse en voz alta es mejor que esperar en silencio: sin esto, un cliente
+## que no llega a montar su escena deja al otro mirando un mundo vacío sin un
+## solo mensaje, que es el mismo síntoma que este acuse viene a eliminar.
+func _on_ready_timeout() -> void:
+	_ready_timeout = null
+	if not is_active:
+		return
+	leave("el otro jugador no terminó de cargar la partida")

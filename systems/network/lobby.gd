@@ -24,6 +24,11 @@ func _ready() -> void:
 	join_button.pressed.connect(_on_join_pressed)
 	NetworkManager.game_ready.connect(_on_game_ready)
 	NetworkManager.connection_error.connect(_on_connection_error)
+	# Sin esto, una sesión que termina ANTES de entrar en la partida —el host se
+	# cae mientras se conecta, o el acuse de carga se rinde— deja los botones
+	# deshabilitados y el rótulo en "Conectando…" para siempre, sin decir por qué
+	# ni permitir reintentar.
+	NetworkManager.session_ended.connect(_on_session_ended)
 
 	status_label.text = "Hospeda una partida o únete a una."
 	_apply_command_line()
@@ -70,6 +75,12 @@ func _on_game_ready(_is_host: bool) -> void:
 	# No hay nada que acordar: el reparto de kits es determinista por `peer_id`
 	# (host = espada), así que cada peer lo calcula solo. Ver `Session.kit_for`.
 	get_tree().change_scene_to_file(WORLD_SCENE)
+
+
+## La sesión terminó sin llegar a la partida: se devuelve el lobby al jugador.
+func _on_session_ended(reason: String) -> void:
+	_set_busy("", false)
+	status_label.text = "Sesión terminada: %s." % reason
 
 
 func _on_connection_error(message: String) -> void:

@@ -147,7 +147,10 @@ está mal modelada. Conviértela en Nodo.
 
 Cualquier nodo puede **leer** `NetworkManager.is_active` y `NetworkManager.is_host_mode`.
 Solo las escenas coordinadoras (`systems/network/lobby.gd`, `systems/world/`) pueden
-**llamar** `NetworkManager.host()`, `.join()`, `.leave()` o `.reset()`.
+**llamar** `NetworkManager.host()`, `.join()`, `.leave()`, `.reset()` o
+`.report_scene_ready()`. Esta última entra en la lista por la misma razón que las otras:
+el acuse de carga cuenta un peer por llamada, así que si la usa quien no debe, la ronda
+se completa antes de tiempo y vuelve el fallo que impide.
 
 Corolario: **el `NetworkManager` no conoce rutas de escena.** Avisa por señal
 (`game_ready`, `session_ended`, `connection_error`) y quien escucha decide adónde ir. En
@@ -155,9 +158,19 @@ el proyecto anterior hacía `change_scene_to_file` en tres sitios y quedó atado
 de aquel juego.
 
 **Modelo de red: autoridad por jugador.** Cada peer simula su propio personaje y replica
-el resultado; un nodo sin la autoridad no simula. Antes de preguntar por la autoridad hay
-que comprobar `multiplayer.has_multiplayer_peer()`: tras una desconexión la escena vive
-unos frames sin peer, y consultar ahí es un error de motor.
+el resultado; un nodo sin la autoridad no simula.
+
+Para preguntar **si hay sesión** se lee `NetworkManager.is_active`, no
+`multiplayer.has_multiplayer_peer()`: medido, este devuelve `true` aunque no haya red,
+porque Godot 4 instala un `OfflineMultiplayerPeer` con `get_unique_id() == 1`. La versión
+anterior de este párrafo decía lo contrario y sostenía el patrón
+`not multiplayer.has_multiplayer_peer() or …`, cuya primera rama no se toma nunca.
+
+**Nada replicado sale hasta que ambos extremos tengan su escena montada.** Un
+`MultiplayerSpawner` emite una sola vez y no reintenta: si el otro peer aún no tiene el
+nodo padre, ese spawn se pierde para siempre. Por eso el arranque pasa por el acuse
+(`report_scene_ready()` → `all_peers_ready`) y no por un margen de frames, que es una
+apuesta sobre la latencia.
 
 ---
 

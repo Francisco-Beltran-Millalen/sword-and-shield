@@ -30,7 +30,20 @@ func _ready() -> void:
 
 	_load_zone(FIRST_ZONE, &"")
 
-	if not multiplayer.has_multiplayer_peer() or multiplayer.is_server():
+	# Nadie aparece hasta que el otro extremo también tenga su árbol montado. El
+	# `MultiplayerSpawner` emite una sola vez y no reintenta: si el cliente aún
+	# no tiene `World/PlayerSpawner`, ese jugador no llega nunca y el cliente
+	# juega —o mira— una partida sin personajes.
+	#
+	# ONE_SHOT porque `all_peers_ready` se emite en CADA carga acusada, no solo
+	# en la primera: sin esto, el primer cambio de zona volvería a hacer aparecer
+	# a los dos jugadores encima de los que ya hay.
+	NetworkManager.all_peers_ready.connect(_on_everyone_loaded, CONNECT_ONE_SHOT)
+	NetworkManager.report_scene_ready()
+
+
+func _on_everyone_loaded() -> void:
+	if not NetworkManager.is_active or multiplayer.is_server():
 		_spawn_all()
 
 
@@ -125,11 +138,16 @@ func _on_traversal_requested(target_zone: String, target_door: StringName) -> vo
 @rpc("authority", "call_local", "reliable")
 func rpc_change_zone(zone_path: String, from_door: StringName) -> void:
 	if multiplayer.has_multiplayer_peer() and multiplayer.is_server():
-		# La misma cortesía que se hace al arrancar la partida
-		# (`NetworkManager._start_game`): el cliente encola su carga al recibir
-		# este RPC, y el host espera un frame para que la zona ya esté en su
-		# árbol cuando los `MultiplayerSynchronizer` del host —los de los
-		# enemigos que la zona trae dentro— registren su caché de rutas.
+		# Un frame de cortesía para que el cliente vaya por delante. NO es una
+		# garantía: con latencia mayor que un frame el host carga primero y sus
+		# sincronizadores de enemigos apuntan a rutas que el cliente todavía no
+		# tiene. Medido, eso son unas pocas líneas de "Node not found" y se
+		# recupera solo al paquete siguiente —la posición se replica en modo
+		# ALWAYS y los enemigos no los crea ningún spawner, así que no hay ningún
+		# comando de una sola vez que perder—. El acuse de carga existe (ver
+		# `NetworkManager.report_scene_ready`) y aquí NO se usa a propósito:
+		# bloquear cada cambio de zona para ahorrar ese ruido salía más caro que
+		# el ruido. Ver el mapa, tabla `Deferred`.
 		await get_tree().process_frame
 	_load_zone(zone_path, from_door)
 	_changing_zone = false
