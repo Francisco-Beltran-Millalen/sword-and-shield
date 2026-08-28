@@ -7,7 +7,7 @@ extends Control
 ## `NetworkManager` no conoce rutas de escena: avisa por señal y es este nodo
 ## quien decide adónde ir.
 
-const ARENA_SCENE := "res://systems/world/arena.tscn"
+const WORLD_SCENE := "res://systems/world/world.tscn"
 
 @onready var host_button: Button = %HostButton
 @onready var join_button: Button = %JoinButton
@@ -69,7 +69,7 @@ func _on_join_pressed() -> void:
 func _on_game_ready(_is_host: bool) -> void:
 	# No hay nada que acordar: el reparto de kits es determinista por `peer_id`
 	# (host = espada), así que cada peer lo calcula solo. Ver `Session.kit_for`.
-	get_tree().change_scene_to_file(ARENA_SCENE)
+	get_tree().change_scene_to_file(WORLD_SCENE)
 
 
 func _on_connection_error(message: String) -> void:

@@ -1,0 +1,141 @@
+extends Node2D
+
+## Coordinador del mundo: sostiene la zona activa y hace aparecer a los
+## jugadores.
+##
+## Solo hay **una** zona cargada a la vez, para los dos jugadores. Cruzar de
+## zona exige que ambos estén en la puerta (`ZoneDoor.required_players`), así
+## que el caso "cada jugador en una zona distinta" no existe.
+## Ver `docs/adr/rationale/adr-001-zonas-y-salas.md`.
+##
+## El cambio de zona lo decide el host y lo replica por RPC: es un evento raro
+## y discreto, justo lo que el ADR buscaba al elegir la zona como unidad.
+
+const PlayerScene := preload("res://characters/player/player.tscn")
+const LOBBY_SCENE := "res://systems/network/lobby.tscn"
+const FIRST_ZONE := "res://level/zones/zone_verdant.tscn"
+
+@onready var players_root: Node2D = $Players
+@onready var zone_root: Node2D = $ZoneRoot
+@onready var spawner: MultiplayerSpawner = $PlayerSpawner
+
+var current_zone: Zone
+var _changing_zone: bool = false
+
+
+func _ready() -> void:
+	spawner.spawn_function = _spawn_player
+	GameEvents.player_downed.connect(_on_player_downed)
+	NetworkManager.session_ended.connect(_on_session_ended)
+
+	_load_zone(FIRST_ZONE, &"")
+
+	if not multiplayer.has_multiplayer_peer() or multiplayer.is_server():
+		_spawn_all()
+
+
+func _unhandled_input(event: InputEvent) -> void:
+	if event.is_action_pressed(&"ui_cancel"):
+		NetworkManager.leave()
+		get_viewport().set_input_as_handled()
+
+
+## Carga una zona y descarga la anterior. La zona es la unidad de carga: dentro
+## de ella no se vuelve a cargar nada.
+func _load_zone(zone_path: String, from_door: StringName) -> void:
+	for child in zone_root.get_children():
+		zone_root.remove_child(child)
+		child.queue_free()
+
+	var packed := load(zone_path) as PackedScene
+	if packed == null:
+		push_error("No se pudo cargar la zona '%s'." % zone_path)
+		return
+
+	current_zone = packed.instantiate() as Zone
+	if current_zone == null:
+		push_error("La escena '%s' no tiene raíz Zone." % zone_path)
+		return
+	zone_root.add_child(current_zone)
+
+	for door in current_zone.doors():
+		door.traversal_requested.connect(_on_traversal_requested)
+
+	GameEvents.zone_entered.emit(current_zone.zone_id)
+	_place_players(current_zone.arrival_point(from_door))
+
+
+func _place_players(at: Vector2) -> void:
+	var offset := -40.0
+	for child in players_root.get_children():
+		var player := child as Player
+		if player == null:
+			continue
+		player.place_at(at + Vector2(offset, -40.0))
+		offset += 80.0
+
+
+func _on_traversal_requested(target_zone: String, target_door: StringName) -> void:
+	if _changing_zone or target_zone.is_empty():
+		return
+	# El host decide y lo replica: el cambio de zona debe ocurrir a la vez en
+	# ambos extremos o los jugadores acabarían en mundos distintos.
+	if multiplayer.has_multiplayer_peer() and not multiplayer.is_server():
+		return
+	_changing_zone = true
+	if multiplayer.has_multiplayer_peer():
+		rpc("rpc_change_zone", target_zone, target_door)
+	else:
+		rpc_change_zone(target_zone, target_door)
+
+
+@rpc("authority", "call_local", "reliable")
+func rpc_change_zone(zone_path: String, from_door: StringName) -> void:
+	_load_zone(zone_path, from_door)
+	_changing_zone = false
+
+
+func _spawn_all() -> void:
+	var peers: Array[int] = [1]
+	if multiplayer.has_multiplayer_peer():
+		for peer in multiplayer.get_peers():
+			peers.append(peer)
+
+	for index in range(peers.size()):
+		spawner.spawn({"peer": peers[index], "index": index})
+
+
+## La ejecuta el spawner en TODOS los peers con los datos que envió el host.
+func _spawn_player(data: Variant) -> Node:
+	var info: Dictionary = data
+	var peer_id: int = info.get("peer", 1)
+	var index: int = info.get("index", 0)
+
+	var player := PlayerScene.instantiate() as Player
+	player.name = "Player_%d" % peer_id
+	player.player_index = index
+	player.display_name = SessionState.kit_name_for(peer_id)
+	player.set_owning_peer(peer_id)
+	player.equip_kit(SessionState.kit_scene_for(peer_id))
+
+	if current_zone != null:
+		player.position = current_zone.arrival_point() + Vector2(index * 80 - 40, -40)
+	return player
+
+
+func _on_player_downed(player_index: int) -> void:
+	# Provisional: reaparecer en la sala por defecto de la zona. El sistema de
+	# puntos de guardado llega con la progresión.
+	var timer := get_tree().create_timer(1.5)
+	await timer.timeout
+	for child in players_root.get_children():
+		var player := child as Player
+		if player != null and player.player_index == player_index:
+			player.revive_full()
+			if current_zone != null:
+				player.place_at(current_zone.arrival_point())
+			return
+
+
+func _on_session_ended(_reason: String) -> void:
+	get_tree().change_scene_to_file(LOBBY_SCENE)

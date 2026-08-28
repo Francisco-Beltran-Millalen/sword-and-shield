@@ -21,13 +21,18 @@ extends Node
 ## Este autoload no guarda estado (§9): solo retransmite. El estado del mundo
 ## vive en el recurso de progreso, no aquí.
 
-## --- Salas ---
-## Se pidió transición a otra sala. `door_id` identifica por dónde se entra.
+## --- Zonas y salas ---
+## Se pidió cambiar de zona. `door_id` es la puerta por la que se aparece.
 @warning_ignore("unused_signal")
-signal room_transition_requested(room_path: String, door_id: StringName)
-## Una sala terminó de cargar y sus jugadores ya están colocados.
+signal zone_change_requested(zone_path: String, door_id: StringName)
+## Un jugador local entró en una sala nueva. La sala NO se carga: es una región
+## dentro de la zona, y esto solo significa que cambió el encuadre.
 @warning_ignore("unused_signal")
 signal room_entered(room_id: StringName)
+## Terminó de cargar una zona y los jugadores ya están colocados. La zona es la
+## unidad de carga; esto sí es un evento de carga real.
+@warning_ignore("unused_signal")
+signal zone_entered(zone_id: StringName)
 
 ## --- Progresión ---
 ## Se adquirió una habilidad. El HUD, las puertas y el mapa reaccionan.

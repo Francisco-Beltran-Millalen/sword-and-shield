@@ -16,7 +16,7 @@ estructura padre-hijo del árbol impone la dirección de las dependencias por s�
 ```
 res:// (project.godot)
 ├── systems/world/world.tscn                  # Coordinador — ciclo de vida, cablea hijos
-│   ├── level/rooms/room_*.tscn               # Sala activa (TileMapLayer + objetos)
+│   ├── level/zones/zone_*.tscn               # Zona activa: unidad de CARGA (contiene sus salas)
 │   ├── characters/player/player.tscn         # Entidad (x2: espada y escudo)
 │   │   ├── PlayerVisuals                     # Nodo hijo de presentación
 │   │   ├── PlayerInputAdapter                # Nodo hijo adaptador de input
@@ -44,7 +44,7 @@ res:// (project.godot)
 | `characters/player/`       | Entidad — hijo bajo el mundo                      |
 | `characters/enemy/`        | Entidad — hijo bajo el mundo                      |
 | `components/`              | Nodos hijo reutilizables (§6)                     |
-| `level/rooms/`             | Contenido — salas instanciadas por el coordinador |
+| `level/zones/`             | Contenido — zonas: la unidad de carga (ADR-001). Las salas viven dentro y NO se cargan |
 | `level/building_kit/`      | Contenido compartido — tilesets y objetos         |
 | `ui/`                      | Capa UI — hijo bajo el coordinador                |
 | `autoloads/`               | Singleton transversal, fuera del árbol de escena  |

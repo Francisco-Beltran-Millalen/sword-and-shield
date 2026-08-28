@@ -15,6 +15,7 @@ extends CharacterBody2D
 signal state_changed(new_state: State)
 signal health_changed(current: int, maximum: int)
 signal facing_changed(facing: int)
+signal room_changed(room_id: StringName)
 
 enum State {
 	IDLE,
@@ -39,6 +40,8 @@ enum State {
 @onready var camera: PlayerCamera = $PlayerCamera
 
 var kit: PlayerKit
+## Sala en la que está. La escribe `enter_room`; la leen el guardado y el HUD.
+var current_room: StringName = &""
 var _facing: int = 1
 var _pending_impulse: Vector2 = Vector2.ZERO
 
@@ -146,6 +149,18 @@ func apply_impulse(impulse: Vector2) -> void:
 	if stats.get_stat_bool(StatsComponent.StatID.IS_IMMOVABLE):
 		return
 	_pending_impulse += impulse
+
+
+## Entró en una sala: reencuadra la cámara a sus límites. La llama la
+## `RoomBounds` correspondiente. Solo surte efecto en el personaje local — el
+## remoto lleva la cámara apagada.
+func enter_room(room_id: StringName, bounds: Rect2) -> void:
+	if room_id == current_room:
+		return
+	current_room = room_id
+	if camera != null:
+		camera.apply_room_bounds(bounds)
+	room_changed.emit(room_id)
 
 
 ## Coloca al jugador en un punto y limpia el movimiento. Lo usan las

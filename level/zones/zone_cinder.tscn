@@ -1,0 +1,95 @@
+[gd_scene load_steps=5 format=3]
+
+[ext_resource type="Script" path="res://level/systems/zone.gd" id="1"]
+[ext_resource type="Script" path="res://level/systems/room_bounds.gd" id="2"]
+[ext_resource type="Script" path="res://level/systems/room_scaffold.gd" id="3"]
+[ext_resource type="Script" path="res://level/systems/zone_door.gd" id="4"]
+
+[node name="ZoneCinder" type="Node2D"]
+script = ExtResource("1")
+zone_id = &"cinder"
+default_spawn_room = &"cinder_1"
+
+[node name="Rooms" type="Node2D" parent="."]
+
+; --- cinder_1 — llegada desde Verdant ---
+[node name="Room1" type="Node2D" parent="Rooms"]
+
+[node name="Bounds" type="Area2D" parent="Rooms/Room1"]
+script = ExtResource("2")
+room_id = &"cinder_1"
+size = Vector2(1280, 1280)
+
+[node name="Scaffold" type="Node2D" parent="Rooms/Room1"]
+script = ExtResource("3")
+size = Vector2(1280, 1280)
+openings = 8
+platform_rows = 2
+
+[node name="DoorToVerdant" type="Area2D" parent="Rooms/Room1"]
+position = Vector2(-544, 528)
+script = ExtResource("4")
+door_id = &"cinder_west"
+target_zone = "res://level/zones/zone_verdant.tscn"
+target_door = &"verdant_east"
+required_players = 2
+
+; --- cinder_2 — descenso ---
+[node name="Room2" type="Node2D" parent="Rooms"]
+position = Vector2(1280, 0)
+
+[node name="Bounds" type="Area2D" parent="Rooms/Room2"]
+script = ExtResource("2")
+room_id = &"cinder_2"
+size = Vector2(1280, 1280)
+
+[node name="Scaffold" type="Node2D" parent="Rooms/Room2"]
+script = ExtResource("3")
+size = Vector2(1280, 1280)
+openings = 6
+platform_rows = 3
+
+; --- cinder_3 — galería intermedia ---
+[node name="Room3" type="Node2D" parent="Rooms"]
+position = Vector2(1280, 1280)
+
+[node name="Bounds" type="Area2D" parent="Rooms/Room3"]
+script = ExtResource("2")
+room_id = &"cinder_3"
+size = Vector2(1280, 1280)
+
+[node name="Scaffold" type="Node2D" parent="Rooms/Room3"]
+script = ExtResource("3")
+size = Vector2(1280, 1280)
+openings = 9
+platform_rows = 3
+
+; --- cinder_4 — antesala ---
+[node name="Room4" type="Node2D" parent="Rooms"]
+position = Vector2(2560, 1280)
+
+[node name="Bounds" type="Area2D" parent="Rooms/Room4"]
+script = ExtResource("2")
+room_id = &"cinder_4"
+size = Vector2(1280, 1280)
+
+[node name="Scaffold" type="Node2D" parent="Rooms/Room4"]
+script = ExtResource("3")
+size = Vector2(1280, 1280)
+openings = 6
+platform_rows = 2
+
+; --- cinder_5 — fondo de la zona ---
+[node name="Room5" type="Node2D" parent="Rooms"]
+position = Vector2(2560, 2560)
+
+[node name="Bounds" type="Area2D" parent="Rooms/Room5"]
+script = ExtResource("2")
+room_id = &"cinder_5"
+size = Vector2(1280, 1280)
+
+[node name="Scaffold" type="Node2D" parent="Rooms/Room5"]
+script = ExtResource("3")
+size = Vector2(1280, 1280)
+openings = 1
+platform_rows = 4

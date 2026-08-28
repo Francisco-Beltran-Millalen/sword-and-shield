@@ -41,6 +41,11 @@ superficie pública y las cláusulas de la constitución que la gobiernan.
 | `GuardBox` | `components/guard_box.gd` (86) | Área de guardia. `raise(facing)`, `lower()`, `set_facing()`, `is_in_parry_window()`, `blocks(hitbox)`. Señal `blocked(hitbox, perfect)`. | §2, §13 (Timer para el parry) |
 | `PlayerCamera` | `systems/camera/player_camera.gd` (66) | `Camera2D` del personaje. `set_local(bool)` la enciende solo en el peer con autoridad; `apply_room_bounds(Rect2)` la encierra en la sala. Adelanto horizontal y suavizado nativos. | §13 (`position_smoothing`, `limit_*`; sin lerp a mano) |
 | `Session` | `systems/network/session.gd` (60) | Autoload `SessionState`. `kit_for(peer)`, `kit_scene_for(peer)`, `kit_name_for(peer)`, `assign(host, guest)`, `clear()`. Reparto **determinista por peer_id**: no se replica. | §9 (estado de sesión, `clear()` lo vacía) |
+| `Zone` | `level/systems/zone.gd` (103) | `@tool`. Raíz de zona: la **unidad de carga**. `rooms()`, `room(id)`, `doors()`, `door(id)`, `arrival_point(from_door)`. Valida en el editor ids repetidos y spawn inexistente. | §13 (`_get_configuration_warnings`), ADR-001 |
+| `RoomBounds` | `level/systems/room_bounds.gd` (99) | `@tool`. Una sala: unidad de diseño y cámara, **no de carga**. `world_rect()`, señal `player_entered`. Al entrar el jugador local llama a `Player.enter_room`. Se dibuja sola en el editor. | §2 (API pública, no escribe la cámara ajena), §13, ADR-001 |
+| `ZoneDoor` | `level/systems/zone_door.gd` (126) | `@tool`. Único punto de carga real. `arrival_point()`, señales `traversal_requested`, `waiting_changed`. `required_players = 2` hace imposible que los jugadores queden en zonas distintas. | §13, ADR-001 |
+| `RoomScaffold` | `level/systems/room_scaffold.gd` (125) | `@tool`. Geometría **provisional** por banderas de abertura. **A retirar** cuando haya tileset: lo sustituye un `TileMapLayer` con terrain sets. | §13 (provisional, anotado para retirada) |
+| `World` | `systems/world/world.gd` (141) | Coordinador. Sostiene la zona activa, hace aparecer los jugadores con `MultiplayerSpawner` y cambia de zona por RPC del host. Una sola zona cargada a la vez. | §1, §3, §13 (`MultiplayerSpawner`), ADR-001 |
 | `NetworkManager` | `autoloads/network_manager.gd` (150) | Autoload. `host(port)`, `join(ip, port)`, `leave(reason)`, `reset()`. Señales `game_ready`, `session_ended`, `connection_error`. **No conoce ninguna ruta de escena** — a diferencia del original. | §3, §9 (estado de sesión, se limpia en `reset`) |
 | `GameEvents` | `autoloads/game_events.gd` (51) | Autoload. Solo señales, sin estado. Eventos globales: salas, progresión, combate, sesión. Las tres condiciones de admisión están en el propio archivo. | §9 (sin estado) |
 
@@ -64,6 +69,9 @@ no se cumpla, construirlo es trabajo especulativo y no se hace.
 | Intercambio de kits en caliente | Se decida que espada y escudo son intercambiables a mitad de partida |
 | Reconciliación / autoridad del host sobre jugadores | Aparezca competitivo, o se detecten abusos del cliente autoritativo |
 | Simulación de enemigos autoritativa en el host | Entren enemigos: su estado no puede ser autoritativo por cliente |
+| Geometría con `TileMapLayer` + terrain sets (retira `RoomScaffold`) | Exista un tileset propio |
+| Mecanismo de reagrupamiento entre jugadores | Se note en pruebas que la dispersión dentro de una zona molesta (candidato: el tether) |
+| Precarga de la zona vecina | Se mida un parón perceptible al cruzar una puerta — no antes |
 | Máquina de estados compartida en `components/` | Un segundo tipo de entidad necesita el mismo grafo de estados que el jugador |
 | Sistema de guardado | Existe progresión persistente entre sesiones (habilidades desbloqueadas) |
 
@@ -73,5 +81,6 @@ no se cumpla, construirlo es trabajo especulativo y no se hace.
 
 | Qué | Motivo |
 | --- | ------ |
+| `systems/world/arena.gd` / `arena.tscn` | Escena de juego de una sola pieza. La sustituye `world.tscn` + zonas al adoptarse el ADR-001. |
 | `systems/world/boot.gd` / `boot.tscn` | Andamio de dos jugadores locales sobre una escena fija. Lo sustituye `lobby.tscn` → `arena.tscn` al decidirse que el juego es solo en red. |
 | Acciones de entrada `p1_*` / `p2_*` | Colapsadas a un solo juego de acciones: cada cliente controla un personaje, no dos en el mismo teclado. |
