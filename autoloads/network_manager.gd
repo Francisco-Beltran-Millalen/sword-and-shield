@@ -87,9 +87,25 @@ func join(ip: String, p_port: int = DEFAULT_PORT) -> Error:
 	return OK
 
 
+## Cierra la sesión y deja el árbol en el estado de arranque.
+##
+## Restaurar un `OfflineMultiplayerPeer` NO es cosmético: mantiene la invariante
+## de que **siempre hay un peer asignado**. Sin ella, entre `reset()` y el cambio
+## de escena queda una ventana en la que `get_unique_id()` e
+## `is_multiplayer_authority()` son errores de motor —medido: "No multiplayer
+## peer is assigned"—, y defenderse de esa ventana obligaba a un guardia
+## `has_multiplayer_peer()` repetido en doce sitios. Es el peer que Godot instala
+## por defecto al arrancar (§13): con él, `get_unique_id()` vuelve a 1,
+## `is_server()` a `true` y los RPC `call_local` siguen entregándose.
+##
+## El socket ENet lo cierra el propio peer al liberarse —es `RefCounted` y aquí
+## se suelta su última referencia—, no el hecho de asignar `null` antes. Medido:
+## con o sin ese paso intermedio, el puerto vuelve a estar libre; y si alguien
+## guardara el peer en una variable de este nodo, no lo estaría con ninguno de
+## los dos. Por eso se asigna directamente y no hay paso intermedio que explicar.
 func reset() -> void:
 	_disconnect_signals()
-	multiplayer.multiplayer_peer = null
+	multiplayer.multiplayer_peer = OfflineMultiplayerPeer.new()
 	is_active = false
 	is_host_mode = false
 	_game_started = false
@@ -178,9 +194,11 @@ func _start_game() -> void:
 
 ## Este peer ya tiene montada su escena de juego. La llama quien la monta.
 ##
-## Sin sesión de red contesta en el acto: no se pregunta por peers ni por
-## `has_multiplayer_peer()` —que devuelve `true` incluso sin sesión— sino por
-## `is_active`, que es el dato del que este nodo es dueño.
+## Sin sesión de red contesta en el acto. Se pregunta por `is_active`, que es el
+## dato del que este nodo es dueño, y no por `has_multiplayer_peer()`: ese
+## devuelve `true` aunque no haya red —Godot instala un `OfflineMultiplayerPeer`
+## al arrancar— y desde `reset()` lo devuelve siempre, por la invariante de
+## arriba. Como pregunta de sesión no distingue nada.
 func report_scene_ready() -> void:
 	if not is_active:
 		all_peers_ready.emit()

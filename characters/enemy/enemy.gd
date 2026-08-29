@@ -81,8 +81,9 @@ func _ready() -> void:
 func _physics_process(delta: float) -> void:
 	# Al contrario que el jugador, al enemigo lo simula el host y punto: su
 	# estado no puede ser autoritativo por cliente o cada extremo vería una
-	# persecución distinta. Sin sesión de red (tests, escena suelta) simula.
-	if multiplayer.has_multiplayer_peer() and not is_multiplayer_authority():
+	# persecución distinta. Sin sesión de red (tests, escena suelta) simula: su
+	# autoridad es la 1 por defecto y el peer offline también es el 1.
+	if not is_multiplayer_authority():
 		return
 
 	if state_machine.is_in(State.DOWNED):

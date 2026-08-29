@@ -60,14 +60,19 @@ func preview_damage(raw: int) -> int:
 
 
 ## ¿Manda este peer sobre la entidad que recibe el golpe? Sin sesión de red
-## (tests, escena suelta) manda siempre. Se comprueba que haya peer antes de
-## preguntar por la autoridad: tras una desconexión la escena vive unos frames
-## sin él y consultarlo ahí es un error de motor.
+## (tests, escena suelta) manda siempre: la autoridad por defecto de un nodo es
+## el peer 1 y el `OfflineMultiplayerPeer` que Godot deja puesto también.
+##
+## Fuera del árbol se resuelve aquí y punto: `is_multiplayer_authority()` es un
+## error de motor si el nodo no está dentro (medido), y encaminar el golpe a otro
+## peer tampoco sería posible. El guardia `has_multiplayer_peer()` que había en su
+## lugar decía cubrir la desconexión, pero eso resultó falso al medirlo: el motor
+## no retira el peer cuando cae el otro extremo.
 func _owns_entity() -> bool:
 	var entity := get_parent()
-	if entity == null:
+	if entity == null or not entity.is_inside_tree():
 		return true
-	return not multiplayer.has_multiplayer_peer() or entity.is_multiplayer_authority()
+	return entity.is_multiplayer_authority()
 
 
 func _on_wounded(hitbox: Hitbox, hit_position: Vector2) -> void:
@@ -84,7 +89,17 @@ func _on_wounded(hitbox: Hitbox, hit_position: Vector2) -> void:
 	# le encamina el impacto ya resuelto en geometría; el atacante no viaja
 	# porque un `Node` no es serializable, y en el otro extremo el crédito se
 	# atribuye a la sesión, no a una instancia concreta.
-	_receive_routed_hit.rpc_id(entity.get_multiplayer_authority(),
+	#
+	# Se comprueba que el dueño siga en la sesión: `rpc_id` a un peer que ya no
+	# está es un error de motor ("Attempt to call RPC with unknown peer ID"). Pasa
+	# en la ventana entre que alguien se desconecta y su personaje sale del árbol,
+	# y sin sesión de red pasaría con cualquier entidad de autoridad ajena, porque
+	# `get_peers()` viene vacío. Un golpe que no se puede encaminar se descarta:
+	# quien manda sobre esa víctima ya no está para aplicarlo.
+	var owner_peer := entity.get_multiplayer_authority()
+	if not multiplayer.get_peers().has(owner_peer):
+		return
+	_receive_routed_hit.rpc_id(owner_peer,
 			hitbox.damage, hitbox.knockback, direction, hit_position)
 
 

@@ -94,15 +94,23 @@ func set_owning_peer(peer_id: int) -> void:
 
 
 ## ¿Es este el personaje que controla este cliente?
+##
+## `is_multiplayer_authority()` a secas responde en los tres casos, sin preguntar
+## si hay red: sin sesión, Godot tiene puesto un `OfflineMultiplayerPeer` cuyo
+## `get_unique_id()` es 1 y la autoridad por defecto de un nodo es 1, así que el
+## único jugador que existe es el suyo. Preguntar antes por
+## `has_multiplayer_peer()` era una rama que no se tomaba nunca, y como el
+## `NetworkManager` mantiene siempre un peer asignado, tampoco protege ya de
+## nada (ver `NetworkManager.reset`).
 func is_local_player() -> bool:
-	return not multiplayer.has_multiplayer_peer() or is_multiplayer_authority()
+	return is_multiplayer_authority()
 
 
 ## Solo el peer con autoridad simula y ve por esta cámara. Los personajes
 ## remotos apagan su cámara y su lectura de teclado: su posición y su estado
 ## llegan replicados por el `MultiplayerSynchronizer`.
 func _apply_authority() -> void:
-	var local := not multiplayer.has_multiplayer_peer() or is_multiplayer_authority()
+	var local := is_local_player()
 	if camera != null:
 		camera.set_local(local)
 	if intent_source != null:
@@ -116,10 +124,14 @@ func _physics_process(delta: float) -> void:
 	# posición. Esto sustituye por completo al reenvío de intent por RPC del
 	# proyecto anterior, que añadía un viaje de ida y vuelta a cada pulsación.
 	#
-	# Se comprueba primero que haya peer: tras una desconexión la escena sigue
-	# viva unos frames sin `multiplayer_peer`, y preguntar por la autoridad ahí
-	# es un error de motor. Sin peer (tests, escena suelta) se simula normal.
-	if multiplayer.has_multiplayer_peer() and not is_multiplayer_authority():
+	# El guardia `has_multiplayer_peer()` que había aquí decía protegerse de que
+	# "tras una desconexión la escena sigue viva unos frames sin peer". Medido:
+	# falso. Cuando el otro extremo cae, el motor no quita el peer —`get_unique_id`
+	# sigue devolviendo el id viejo—; el único que lo quitaba era
+	# `NetworkManager.reset()`, y ya no lo hace. Sin sesión, la autoridad por
+	# defecto es 1 y el `OfflineMultiplayerPeer` también, así que esto se cumple
+	# y se simula normal.
+	if not is_multiplayer_authority():
 		return
 
 	var intent := intent_source.poll()

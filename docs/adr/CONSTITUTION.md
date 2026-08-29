@@ -160,11 +160,33 @@ de aquel juego.
 **Modelo de red: autoridad por jugador.** Cada peer simula su propio personaje y replica
 el resultado; un nodo sin la autoridad no simula.
 
-Para preguntar **si hay sesión** se lee `NetworkManager.is_active`, no
-`multiplayer.has_multiplayer_peer()`: medido, este devuelve `true` aunque no haya red,
-porque Godot 4 instala un `OfflineMultiplayerPeer` con `get_unique_id() == 1`. La versión
-anterior de este párrafo decía lo contrario y sostenía el patrón
-`not multiplayer.has_multiplayer_peer() or …`, cuya primera rama no se toma nunca.
+**Son dos preguntas distintas y se hacen con dos cosas distintas:**
+
+| Pregunta | Cómo se hace | Quién puede hacerla |
+| --- | --- | --- |
+| ¿Simulo yo esta entidad? | `is_multiplayer_authority()` | cualquiera |
+| ¿Hay sesión de red? | `NetworkManager.is_active` | cualquiera (leer) |
+
+`multiplayer.has_multiplayer_peer()` **no responde a ninguna de las dos** y no se usa.
+Medido: devuelve `true` aunque no haya red, porque Godot instala un
+`OfflineMultiplayerPeer` con `get_unique_id() == 1`. Como pregunta de sesión no distingue
+nada, y como guardia tampoco hace falta, por la invariante de abajo.
+
+**Invariante: siempre hay un peer asignado.** `NetworkManager.reset()` no deja el árbol
+sin peer: restaura el `OfflineMultiplayerPeer` de arranque. Importa porque sin peer
+`get_unique_id()` e `is_multiplayer_authority()` son errores de motor ("No multiplayer
+peer is assigned"), y esa ventana —que solo abría `reset()`; el motor no retira el peer
+cuando cae el otro extremo, también medido— obligaba a un guardia repetido en doce
+sitios. Con la invariante, `is_multiplayer_authority()` contesta bien en los tres
+escenarios: host, cliente y sin red. Lo fija `tests/integration/test_network_authority.gd`.
+
+Queda un caso que la invariante NO cubre y que hay que seguir vigilando:
+`is_multiplayer_authority()` sobre un nodo **fuera del árbol** también es un error de
+motor. Por eso `DamageReceiver._owns_entity()` comprueba `is_inside_tree()` antes.
+
+Un `rpc_id` a un peer que ya no está en la sesión es igualmente un error de motor
+("Attempt to call RPC with unknown peer ID"). Quien encamine algo comprueba antes
+`multiplayer.get_peers()`.
 
 **Nada replicado sale hasta que ambos extremos tengan su escena montada.** Un
 `MultiplayerSpawner` emite una sola vez y no reintenta: si el otro peer aún no tiene el

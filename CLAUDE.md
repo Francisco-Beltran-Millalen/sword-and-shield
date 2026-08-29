@@ -92,6 +92,12 @@ Ha pasado **cinco veces** en este proyecto. Los tests pasaban y la funcionalidad
   Enganchado al `Player`, la barra se queda a cero hasta el primer golpe — y un test que
   solo compruebe "recibe daño y baja" pasa igual. `test_hud.gd` afirma el valor inicial
   justamente por eso.
+- **Un comentario también miente, y nadie lo compila.** `rpc_change_zone` decía esperar
+  un frame "de cortesía para que el cliente vaya por delante". Lo que de verdad hacía ese
+  `await` era sacar la carga de zona del callback de física — la pide el `body_entered` de
+  una puerta, y quitar un `CollisionObject2D` ahí está prohibido. Creerle al comentario y
+  condicionar la espera a que hubiera red tumbaba los cinco tests de cruce y llenaba la
+  consola de ~1.800 errores. Ahora la carga va diferida siempre y por su razón real.
 - **Ejecuta el juego de verdad** antes de dar algo por terminado. Los tres primeros
   fallos aparecieron al lanzar host y cliente, no en la suite. El cuarto ni siquiera:
   arrancaba limpio en ambos extremos y solo salió al medir la geometría contra el
@@ -109,14 +115,22 @@ Ha pasado **cinco veces** en este proyecto. Los tests pasaban y la funcionalidad
 | **La zona es la unidad de carga; la sala solo encuadra** | Ver `docs/adr/rationale/adr-001-zonas-y-salas.md`. Cargar por sala con dos jugadores independientes es una fuente permanente de desincronización |
 | **Kits fijos, repartidos por `peer_id`** (host = espada) | Determinista: cada cliente lo calcula solo, no se replica. Un desajuste es imposible por construcción |
 
-**`has_multiplayer_peer()` NO distingue si hay red.** Medido: sin sesión devuelve `true`,
-porque Godot 4 instala un `OfflineMultiplayerPeer` por defecto, con `get_unique_id() == 1`.
-Es decir, la primera rama de `not multiplayer.has_multiplayer_peer() or …` —el patrón que
-se repite en `Player.is_local_player()`, `World` y `DamageReceiver`— no se toma nunca. No
-está causando daño: offline el único jugador es el peer 1 y sí tiene la autoridad, así que
-la segunda rama acierta. Pero no sirve como comprobación de "¿estamos en red?", y un nodo
-con autoridad de otro peer se comporta como remoto aunque se juegue en un solo proceso —
-por eso un segundo jugador montado a mano en un test no lo coloca `_place_players`.
+**Dos preguntas distintas, dos formas distintas.** "¿Simulo yo esta entidad?" es
+`is_multiplayer_authority()`; "¿hay sesión de red?" es `NetworkManager.is_active`.
+`has_multiplayer_peer()` no responde a ninguna de las dos y ya no se usa en producción:
+medido, devuelve `true` sin sesión, porque Godot instala un `OfflineMultiplayerPeer` con
+`get_unique_id() == 1`.
+
+Se apoya en una invariante: **siempre hay un peer asignado**, porque `reset()` restaura el
+peer offline en vez de dejar `null`. Sin ella queda una ventana —solo la abría `reset()`—
+en la que preguntar por la autoridad es un error de motor, y de la que había que
+defenderse en doce sitios. Dos casos que la invariante no cubre y siguen vigilados:
+`is_multiplayer_authority()` sobre un nodo **fuera del árbol** también revienta, y un
+`rpc_id` a un peer que ya se fue igual. `test_network_authority.gd` fija los tres.
+
+Ojo con una consecuencia: un nodo con autoridad de otro peer se comporta como remoto
+aunque se juegue en un solo proceso — por eso un segundo jugador montado a mano en un test
+no lo coloca `_place_players`.
 
 ---
 

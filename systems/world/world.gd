@@ -42,8 +42,11 @@ func _ready() -> void:
 	NetworkManager.report_scene_ready()
 
 
+## Los jugadores los hace aparecer el host: el `MultiplayerSpawner` replica el
+## resultado. Sin sesión de red el peer offline ES el servidor, así que la misma
+## comprobación vale para los tres casos y no hace falta preguntar si hay red.
 func _on_everyone_loaded() -> void:
-	if not NetworkManager.is_active or multiplayer.is_server():
+	if multiplayer.is_server():
 		_spawn_all()
 
 
@@ -114,7 +117,7 @@ func _place_players(at: Vector2) -> void:
 		# `_on_entity_downed`.
 		if not child.has_method("place_at"):
 			continue
-		if multiplayer.has_multiplayer_peer() and not child.is_multiplayer_authority():
+		if not child.is_multiplayer_authority():
 			offset += 80.0
 			continue
 		child.place_at(at + Vector2(offset, -40.0))
@@ -125,39 +128,56 @@ func _on_traversal_requested(target_zone: String, target_door: StringName) -> vo
 	if _changing_zone or target_zone.is_empty():
 		return
 	# El host decide y lo replica: el cambio de zona debe ocurrir a la vez en
-	# ambos extremos o los jugadores acabarían en mundos distintos.
-	if multiplayer.has_multiplayer_peer() and not multiplayer.is_server():
+	# ambos extremos o los jugadores acabarían en mundos distintos. Sin sesión de
+	# red el peer offline es el servidor, así que decide igual, y el `rpc` con
+	# `call_local` se entrega localmente (medido) — no hace falta bifurcar.
+	if not multiplayer.is_server():
 		return
 	_changing_zone = true
-	if multiplayer.has_multiplayer_peer():
-		rpc("rpc_change_zone", target_zone, target_door)
-	else:
-		rpc_change_zone(target_zone, target_door)
+	rpc_change_zone.rpc(target_zone, target_door)
 
 
 @rpc("authority", "call_local", "reliable")
 func rpc_change_zone(zone_path: String, from_door: StringName) -> void:
-	if multiplayer.has_multiplayer_peer() and multiplayer.is_server():
-		# Un frame de cortesía para que el cliente vaya por delante. NO es una
-		# garantía: con latencia mayor que un frame el host carga primero y sus
-		# sincronizadores de enemigos apuntan a rutas que el cliente todavía no
-		# tiene. Medido, eso son unas pocas líneas de "Node not found" y se
-		# recupera solo al paquete siguiente —la posición se replica en modo
-		# ALWAYS y los enemigos no los crea ningún spawner, así que no hay ningún
-		# comando de una sola vez que perder—. El acuse de carga existe (ver
+	# DIFERIDO SIEMPRE, y no por cortesía con la red: la petición nace en el
+	# `body_entered` de una puerta, o sea DENTRO del flush de queries de física, y
+	# cargar una zona añade y quita `CollisionObject2D`. Godot lo prohíbe —
+	# "Removing a CollisionObject node during a physics callback is not allowed",
+	# y detrás van ~1.800 "Can't change this state while flushing queries".
+	#
+	# Aquí había un `await process_frame` que decía ser cortesía para el cliente y
+	# de hecho era lo único que sacaba la carga del callback; condicionarlo a que
+	# hubiera red —que es lo que parecía decir— dejaba el camino sin proteger y
+	# tumbaba los cinco tests de cruce. La razón real queda escrita, y de paso
+	# vale también para quien pida el viaje desde fuera de la física.
+	_perform_zone_change.call_deferred(zone_path, from_door)
+
+
+func _perform_zone_change(zone_path: String, from_door: StringName) -> void:
+	if NetworkManager.is_active and multiplayer.is_server():
+		# Ahora sí, la cortesía: un frame para que el cliente vaya por delante. NO
+		# es una garantía: con latencia mayor que un frame el host carga primero y
+		# sus sincronizadores de enemigos apuntan a rutas que el cliente todavía no
+		# tiene. Medido, eso son unas pocas líneas de "Node not found" y se recupera
+		# solo al paquete siguiente —la posición se replica en modo ALWAYS y los
+		# enemigos no los crea ningún spawner, así que no hay ningún comando de una
+		# sola vez que perder—. El acuse de carga existe (ver
 		# `NetworkManager.report_scene_ready`) y aquí NO se usa a propósito:
-		# bloquear cada cambio de zona para ahorrar ese ruido salía más caro que
-		# el ruido. Ver el mapa, tabla `Deferred`.
+		# bloquear cada cambio de zona para ahorrar ese ruido salía más caro que el
+		# ruido. Ver el mapa, tabla `Deferred`.
 		await get_tree().process_frame
 	_load_zone(zone_path, from_door)
+	# Un solo sitio suelta el pestillo, pase lo que pase en la carga: `_load_zone`
+	# tiene salidas tempranas y dejarlo puesto congelaría los viajes para siempre.
 	_changing_zone = false
 
 
 func _spawn_all() -> void:
+	# El 1 es el host, que nunca está en `get_peers()`. Sin sesión de red la lista
+	# viene vacía y queda él solo, que es el único jugador que hay.
 	var peers: Array[int] = [1]
-	if multiplayer.has_multiplayer_peer():
-		for peer in multiplayer.get_peers():
-			peers.append(peer)
+	for peer in multiplayer.get_peers():
+		peers.append(peer)
 
 	for index in range(peers.size()):
 		spawner.spawn({"peer": peers[index], "index": index})
@@ -167,8 +187,6 @@ func _spawn_all() -> void:
 ## que sí está en el árbol: `Node.multiplayer` vale `null` fuera de él, así que
 ## el mismo cálculo hecho sobre un jugador recién instanciado reventaría.
 func _is_own_peer(peer_id: int) -> bool:
-	if not multiplayer.has_multiplayer_peer():
-		return true
 	return peer_id == multiplayer.get_unique_id()
 
 
@@ -229,7 +247,7 @@ func _on_entity_downed(_source: Node, entity: Node) -> void:
 	# en todos, y `HealthComponent` reemite `depleted` al llegar la salud
 	# replicada, así que sin esto había dos temporizadores desfasados por la
 	# latencia reviviendo y recolocando un cuerpo ajeno (§4: un solo escritor).
-	if multiplayer.has_multiplayer_peer() and not entity.is_multiplayer_authority():
+	if not entity.is_multiplayer_authority():
 		return
 	var timer := get_tree().create_timer(1.5)
 	await timer.timeout
