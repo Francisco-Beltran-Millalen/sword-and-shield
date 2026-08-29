@@ -1,7 +1,10 @@
-class_name Session
 extends Node
 
 ## Reparto de la partida: qué peer lleva espada y qué peer lleva escudo.
+##
+## Sin `class_name`, como los demás autoloads: el nombre por el que se le llama es
+## el del autoload (`SessionState`), y en Godot un `class_name` no puede coincidir
+## con él. Quien necesite el script suelto —los tests— lo precarga por ruta.
 ##
 ## El host decide y lo comunica; no se negocia. Es un autoload ligero de sesión
 ## en el sentido de §9: su estado vive lo que vive la partida y `clear()` lo

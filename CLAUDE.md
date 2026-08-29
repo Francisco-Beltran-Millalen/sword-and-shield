@@ -146,9 +146,9 @@ characters/enemy/    Enemy · EnemyArchetype (Resource) · AIIntentSource · Per
   archetypes/        Un .tres por tipo de enemigo
 level/systems/       Zone · RoomBounds · ZoneDoor · RoomScaffold (todos @tool)
 level/zones/         zone_verdant · zone_cinder (5 salas cuadradas cada una)
-systems/             world/ · network/ (lobby, session) · camera/
+systems/             world/ · network/ (lobby) · camera/
 ui/hud/              Hud — capa de solo lectura; el World le empuja, no pregunta
-autoloads/           NetworkManager · GameEvents · SessionState
+autoloads/           NetworkManager · GameEvents · SessionState (los tres, sin `class_name`)
 ```
 
 **Patrones a imitar** (los mejores del repo): `stats_component.gd` descubre sus

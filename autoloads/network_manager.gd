@@ -28,6 +28,19 @@ const MAX_PEERS: int = 1
 ## Generoso a propósito: cubre una carga lenta, no una red lenta.
 const READY_TIMEOUT_SECONDS: float = 15.0
 
+## Por qué murió la última sesión, para que el lobby lo cuente al montarse.
+##
+## Tiempo de vida propio, y por eso vive FUERA del bloque de abajo (§9): tiene que
+## sobrevivir a `reset()` —que corre antes de emitir `session_ended`— y muere al
+## consumirse o al empezar una sesión nueva. No es `ephemeral` ni `persistent`: no
+## llega al disco ni dura lo que la sesión, dura lo que tarda alguien en contarlo.
+##
+## Existe porque el aviso no llega solo: quien termina la partida cambia de escena,
+## y el lobby que aparece se suscribe a `session_ended` DESPUÉS de que se emitiera.
+## Sin esto, el otro jugador se desconecta y vuelves a un lobby que te saluda como
+## si no hubiera pasado nada.
+var _last_end_reason: String = ""
+
 # ephemeral: todo el estado de abajo dura lo que la sesión y lo vacía `reset()`.
 var is_host_mode: bool = false
 var is_active: bool = false
@@ -51,6 +64,7 @@ var _game_started: bool = false
 
 func host(p_port: int = DEFAULT_PORT) -> Error:
 	reset()
+	_last_end_reason = ""
 	port = p_port
 
 	var peer := ENetMultiplayerPeer.new()
@@ -68,6 +82,7 @@ func host(p_port: int = DEFAULT_PORT) -> Error:
 
 func join(ip: String, p_port: int = DEFAULT_PORT) -> Error:
 	reset()
+	_last_end_reason = ""
 	port = p_port
 
 	_last_join_ip = ip.strip_edges()
@@ -152,11 +167,24 @@ func _on_connection_failed() -> void:
 	connection_error.emit("No se pudo conectar a %s:%d." % [failed_ip, port])
 
 
+## Fin involuntario: alguien se cayó o no llegó a tiempo. Solo estos dejan motivo
+## —`leave()` es el jugador pulsando salir, y no hay nada que explicarle— y por eso
+## el aviso de "no terminó de cargar" también entra por aquí.
+##
+## El motivo se guarda DESPUÉS de `reset()`, que no lo toca, y antes de emitir.
 func _end_session(reason: String) -> void:
 	push_warning("[NET] %s" % reason)
 	reset()
+	_last_end_reason = reason
 	await get_tree().process_frame
 	session_ended.emit(reason)
+
+
+## Lo lee el lobby al montarse. Vacía al leer: el motivo se cuenta una vez.
+func consume_end_reason() -> String:
+	var reason := _last_end_reason
+	_last_end_reason = ""
+	return reason
 
 
 func _disconnect_signals() -> void:
@@ -264,4 +292,7 @@ func _on_ready_timeout() -> void:
 	_ready_timeout = null
 	if not is_active:
 		return
-	leave("el otro jugador no terminó de cargar la partida")
+	# Por `_end_session` y no por `leave`: esto no lo decidió nadie, así que el
+	# lobby tiene que poder explicarlo. De paso gana el `push_warning` que este
+	# camino no emitía.
+	_end_session("el otro jugador no terminó de cargar la partida")

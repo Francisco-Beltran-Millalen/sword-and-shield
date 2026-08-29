@@ -19,7 +19,7 @@ config/features=PackedStringArray("4.7", "Forward Plus")
 
 GameEvents="*res://autoloads/game_events.gd"
 NetworkManager="*res://autoloads/network_manager.gd"
-SessionState="*res://systems/network/session.gd"
+SessionState="*res://autoloads/session_state.gd"
 
 [display]
 

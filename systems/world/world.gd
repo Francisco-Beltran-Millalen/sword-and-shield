@@ -51,9 +51,16 @@ func _on_everyone_loaded() -> void:
 
 
 func _unhandled_input(event: InputEvent) -> void:
-	if event.is_action_pressed(&"ui_cancel"):
-		NetworkManager.leave()
-		get_viewport().set_input_as_handled()
+	if not event.is_action_pressed(&"ui_cancel"):
+		return
+	get_viewport().set_input_as_handled()
+	# Sin sesión —esta escena abierta a pelo, que el repo apoya— `leave()` hace
+	# `return` y no emite `session_ended`: sin esto, Esc no hacía absolutamente
+	# nada y no había forma de salir de aquí.
+	if not NetworkManager.is_active:
+		get_tree().change_scene_to_file(LOBBY_SCENE)
+		return
+	NetworkManager.leave()
 
 
 ## Carga una zona y descarga la anterior. La zona es la unidad de carga: dentro
@@ -239,6 +246,10 @@ func _spawn_player(data: Variant) -> Node:
 
 ## Provisional: reaparecer en la sala por defecto de la zona. El sistema de
 ## puntos de guardado llega con la progresión.
+##
+## `current_zone` se lee DESPUÉS de la espera, así que si mientras tanto se cruzó
+## una puerta el caído reaparece en la zona nueva. Es lo que se quiere —la zona
+## vieja ya no está cargada para nadie—, pero conviene saberlo antes de tocarlo.
 ##
 ## Recibe la entidad por `bind`, así que sirve igual para un enemigo que deba
 ## reaparecer: no comprueba tipos ni busca por índice.

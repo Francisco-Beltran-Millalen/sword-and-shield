@@ -32,7 +32,7 @@ res://
 ├── components/           # Nodos hijo reutilizables
 ├── systems/
 │   ├── world/            # Coordinador raíz
-│   ├── network/          # Sesión y replicación
+│   ├── network/          # Sesión: el lobby que la abre y la cierra
 │   └── camera/           # Cámara de 2 jugadores
 ├── level/
 │   ├── rooms/            # Salas
@@ -76,9 +76,9 @@ soportada de lanzarlos.
    cada cliente enmarca al suyo, los dos jugadores pueden estar en salas distintas — que
    es lo que hace viable la exploración divergente de un metroidvania cooperativo.
 3. **Kits fijos por sesión.** Quien hospeda lleva espada; quien se une, escudo. El reparto
-   es **determinista por `peer_id`** (`Session.kit_for`), así que cada cliente lo calcula
+   es **determinista por `peer_id`** (`SessionState.kit_for`), así que cada cliente lo calcula
    solo: no se replica ni se acuerda por RPC, y un desajuste es imposible por
-   construcción. `Session.assign()` queda para cuando el lobby permita elegir.
+   construcción. `SessionState.assign()` queda para cuando el lobby permita elegir.
 
 ### Modelo de red: autoridad por jugador
 

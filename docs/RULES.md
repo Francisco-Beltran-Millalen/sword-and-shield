@@ -91,7 +91,7 @@ res://
 ├── components/                      # §6: Nodos hijo reutilizables
 ├── systems/
 │   ├── world/                       # Coordinador raíz — ciclo de vida y cableado
-│   ├── network/                     # Sesión y replicación
+│   ├── network/                     # Sesión: el lobby que la abre y la cierra
 │   └── camera/                      # Plataforma de cámara para 2 jugadores
 ├── level/
 │   ├── rooms/                       # Salas del metroidvania (.tscn)

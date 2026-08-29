@@ -28,7 +28,7 @@ res:// (project.godot)
 │   │   ├── archetypes/                       # Composición de comportamiento
 │   │   └── locomotion/                       # Motores de movimiento
 │   ├── systems/camera/camera_rig.tscn        # Coordinación de cámara (2 jugadores)
-│   ├── systems/network/                      # Replicación (MultiplayerSpawner/Synchronizer)
+│   ├── systems/network/                      # Sesión: el lobby que la abre y la cierra
 │   └── ui/hud/hud.tscn                       # Capa UI, solo lectura: el coordinador le EMPUJA (§5)
 ├── ui/debug/                                 # Overlays de depuración
 └── autoloads/*.gd                            # Singletons (no están en el árbol de escena)
@@ -40,7 +40,7 @@ res:// (project.godot)
 | -------------------------- | ------------------------------------------------- |
 | `systems/world/`           | Coordinador raíz — dueño del ciclo de vida        |
 | `systems/camera/`          | Capa de coordinación — hijo bajo el coordinador   |
-| `systems/network/`         | Capa de coordinación — replicación y sesión       |
+| `systems/network/`         | Capa de coordinación — la pantalla de sesión      |
 | `characters/player/`       | Entidad — hijo bajo el mundo                      |
 | `characters/enemy/`        | Entidad — hijo bajo el mundo                      |
 | `components/`              | Nodos hijo reutilizables (§6)                     |
@@ -148,9 +148,14 @@ está mal modelada. Conviértela en Nodo.
 Cualquier nodo puede **leer** `NetworkManager.is_active` y `NetworkManager.is_host_mode`.
 Solo las escenas coordinadoras (`systems/network/lobby.gd`, `systems/world/`) pueden
 **llamar** `NetworkManager.host()`, `.join()`, `.leave()`, `.reset()` o
-`.report_scene_ready()`. Esta última entra en la lista por la misma razón que las otras:
-el acuse de carga cuenta un peer por llamada, así que si la usa quien no debe, la ronda
-se completa antes de tiempo y vuelve el fallo que impide.
+`.report_scene_ready()` o `.consume_end_reason()`. `report_scene_ready()` entra en la
+lista por la misma razón que las otras: el acuse de carga cuenta un peer por llamada, así
+que si la usa quien no debe, la ronda se completa antes de tiempo y vuelve el fallo que
+impide. Y `consume_end_reason()` porque vacía al leer: quien lo llame sin pintarlo deja al
+jugador sin saber por qué se acabó la partida.
+
+Los tests de una escena coordinadora cuentan como esa escena: `test_lobby.gd` monta el
+lobby de verdad, y el lobby de verdad usa el autoload de verdad.
 
 Corolario: **el `NetworkManager` no conoce rutas de escena.** Avisa por señal
 (`game_ready`, `session_ended`, `connection_error`) y quien escucha decide adónde ir. En
@@ -299,6 +304,11 @@ Cada variable de estado de un autoload lleva una de estas anotaciones:
 - `# ephemeral: <razón>` — estado de sesión; se limpia entre partidas vía `reset()`
 - `# persistent: <razón>` — dato de usuario que sobrevive cambios de escena y reinicios;
   nunca lo limpia `reset()`
+- un dato cuyo tiempo de vida no sea ninguno de los dos lo declara **por escrito y encima
+  de la variable**, fuera de los bloques etiquetados. Hoy hay uno:
+  `NetworkManager._last_end_reason` sobrevive a `reset()` —que corre antes de emitir
+  `session_ended`— y muere al consumirse. Una anotación colocada bajo un `# ephemeral`
+  que la contradiga es peor que no anotar nada
 
 ---
 
