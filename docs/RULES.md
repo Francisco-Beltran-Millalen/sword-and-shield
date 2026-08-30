@@ -82,20 +82,26 @@ res://
 ├── characters/
 │   ├── player/                      # Jugador (kits espada / escudo)
 │   │   ├── player.tscn / player.gd
-│   │   ├── player_input_adapter.gd
-│   │   └── player_visuals.gd        # §2: cada capacidad es un Nodo/escena aquí
+│   │   ├── intent_source.gd         # §8: la frontera de input, y sus implementaciones
+│   │   ├── local_intent_source.gd
+│   │   ├── locomotion.gd
+│   │   └── kits/                    # §2: la capacidad es un Nodo con su escena
+│   │       ├── sword_kit.tscn / shield_kit.tscn
+│   │       └── attacks/             # Un `.tres` (AttackData) por golpe
 │   └── enemy/
 │       ├── enemy.tscn / enemy.gd
+│       ├── ai_intent_source.gd · perception.gd
 │       ├── archetypes/              # Composición de comportamiento (no subclases)
-│       └── locomotion/              # Motores de movimiento
+│       └── attacks/                 # Sus `AttackData`
 ├── components/                      # §6: Nodos hijo reutilizables
 ├── systems/
 │   ├── world/                       # Coordinador raíz — ciclo de vida y cableado
 │   ├── network/                     # Sesión: el lobby que la abre y la cierra
 │   └── camera/                      # Plataforma de cámara para 2 jugadores
 ├── level/
-│   ├── rooms/                       # Salas del metroidvania (.tscn)
-│   └── building_kit/                # Contenido compartido de construcción
+│   ├── zones/                       # ADR-001: la ZONA es la unidad de carga (.tscn)
+│   ├── systems/                     # Zone · RoomBounds · ZoneDoor · RoomScaffold (@tool)
+│   └── building_kit/                # Contenido compartido de construcción (vacío aún)
 │       ├── objects/                 # Props, plataformas, puertas
 │       └── tilesets/                # TileSets con terrain sets y custom data layers
 ├── ui/
@@ -118,8 +124,9 @@ res://
 - Los autoloads van estrictamente en `autoloads/`.
 - Los recursos de terceros van en `addons/`.
 - Los tests en `tests/`, espejando la estructura de dominios.
-- `level/building_kit/` contiene lo reutilizable entre salas; `level/rooms/` contiene las
-  salas concretas y no define contenido propio nuevo.
+- `level/building_kit/` contiene lo reutilizable entre salas; `level/zones/` contiene las
+  zonas concretas y no define contenido propio nuevo. Había aquí un `level/rooms/`: lo
+  sustituyó `level/zones/` al adoptarse el ADR-001, porque la sala no es unidad de carga.
 
 ---
 
@@ -180,7 +187,12 @@ siempre al final del archivo. Este orden es obligatorio.
 
 ## 6. Git
 
-Formato de commit: `type: descripción breve en inglés`
+Formato de commit: `type(ámbito): qué cambia, en español`
+
+El ámbito entre paréntesis es opcional pero habitual (`fix(zonas):`, `refactor(red):`).
+Esta regla pedía antes el mensaje **en inglés y sin ámbito**, y nunca se siguió: los
+commits del repositorio están todos en español. Manda la práctica, que además deja el
+historial en el mismo idioma que los comentarios del código.
 
 - `feat:` — funcionalidad nueva
 - `fix:` — corrección de bug

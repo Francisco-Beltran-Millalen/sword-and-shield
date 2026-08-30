@@ -16,21 +16,27 @@ estructura padre-hijo del árbol impone la dirección de las dependencias por s�
 ```
 res:// (project.godot)
 ├── systems/world/world.tscn                  # Coordinador — ciclo de vida, cablea hijos
-│   ├── level/zones/zone_*.tscn               # Zona activa: unidad de CARGA (contiene sus salas)
-│   ├── characters/player/player.tscn         # Entidad (x2: espada y escudo)
-│   │   ├── PlayerVisuals                     # Nodo hijo de presentación
-│   │   ├── PlayerInputAdapter                # Nodo hijo adaptador de input
-│   │   ├── Abilities/                        # §2: cada capacidad es un Nodo/escena
-│   │   │   ├── SwordSwing                    #      con su Hitbox, AnimationPlayer, timers
-│   │   │   └── ShieldGuard
-│   │   └── Hurtbox (Area2D)                  # §13: capas separadas hitbox/hurtbox
-│   ├── characters/enemy/enemy.tscn           # Entidad
-│   │   ├── archetypes/                       # Composición de comportamiento
-│   │   └── locomotion/                       # Motores de movimiento
-│   ├── systems/camera/camera_rig.tscn        # Coordinación de cámara (2 jugadores)
-│   ├── systems/network/                      # Sesión: el lobby que la abre y la cierra
+│   ├── ZoneRoot → level/zones/zone_*.tscn    # Zona activa: unidad de CARGA (contiene sus salas)
+│   ├── Players → characters/player/player.tscn   # Entidad (x2), la crea el MultiplayerSpawner
+│   │   ├── StatsComponent · HealthComponent · StateMachine · Locomotion
+│   │   ├── IntentSource                      # §8: el ÚNICO sitio con `Input.*`
+│   │   ├── Hurtbox (Area2D)                  # §13: capas separadas hitbox/hurtbox
+│   │   ├── DamageReceiver                    # Convierte el impacto en daño
+│   │   ├── Visuals (Node2D)                  # Presentación; se voltea con el facing
+│   │   ├── PlayerCamera                      # Encendida solo en el peer con autoridad
+│   │   └── Kit → kits/sword_kit.tscn | shield_kit.tscn
+│   │       │                                 # §2: la capacidad es un Nodo, con sus hijos.
+│   │       │                                 # Se instala en runtime (`equip_kit`): quién
+│   │       │                                 # lleva qué es decisión de SESIÓN, no de escena
+│   │       ├── Attacker + Hitbox + AnimationPlayer      (espada)
+│   │       └── GuardBox                                  (escudo)
+│   ├── characters/enemy/enemy.tscn           # Entidad. Vive DENTRO de la escena de su zona,
+│   │   │                                     # no la crea ningún spawner
+│   │   ├── (los mismos componentes del jugador, sin uno propio)
+│   │   ├── AIIntentSource                    # Lo ÚNICO que estrena: rellena el mismo intent
+│   │   └── Perception (Area2D)               # A quién ve se cambia por máscara, no por tipo
+│   ├── PlayerSpawner (MultiplayerSpawner)    # §13: aparición replicada
 │   └── ui/hud/hud.tscn                       # Capa UI, solo lectura: el coordinador le EMPUJA (§5)
-├── ui/debug/                                 # Overlays de depuración
 └── autoloads/*.gd                            # Singletons (no están en el árbol de escena)
 ```
 
@@ -278,9 +284,15 @@ Profundidad de herencia ≤ 2 niveles (p. ej. `CharacterBody2D → Player`). Un 
 es violación. Los comportamientos que exigirían un tercer nivel se componen como Nodos
 hijo.
 
-En concreto: los arquetipos de enemigo (`characters/enemy/archetypes/`) y los modos de
-locomoción (`characters/enemy/locomotion/`) son **composición**, no subclases de `Enemy`.
-No existe `Enemy → FlyingEnemy → HomingFlyingEnemy`.
+En concreto: los arquetipos de enemigo (`characters/enemy/archetypes/`) son
+**composición**, no subclases de `Enemy`. No existe `Enemy → FlyingEnemy →
+HomingFlyingEnemy`.
+
+Aquí había también una carpeta `characters/enemy/locomotion/` para "modos de movimiento"
+del enemigo. Nunca tuvo contenido, y no debe tenerlo: el enemigo usa el mismo
+`Locomotion` que el jugador. Si un día necesitara moverse de otra forma, la forma
+correcta es otro nodo de locomoción en `components/`, reutilizable, no uno que viva bajo
+`enemy/`.
 
 ---
 
