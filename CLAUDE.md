@@ -253,7 +253,11 @@ Por orden de lo que más desbloquea:
    habilidades no hay esquema que inventar.
 4. **Mapa.**
 5. **Tileset y arte.** Todo son `Polygon2D`. `RoomScaffold` es geometría provisional y
-   está marcado para retirarse cuando haya `TileMapLayer` con terrain sets.
+   está marcado para retirarse cuando haya `TileMapLayer` con terrain sets. Mientras
+   tanto el nivel **no se lee**: un único color plano para suelo, pared y plataforma,
+   sin `clear_color`, y las dos zonas idénticas. Y las plataformas miden 40x24 px contra
+   un cuerpo de 28x44, así que no se puede caminar sobre ellas — las dos cosas, con lo
+   ya medido y cómo hacerlas, en `ARCHITECTURE-MAP.md` → *Deferred*.
 6. **Audio.** Nada.
 
 También pendientes, anotados con su disparador en `ARCHITECTURE-MAP.md` → *Deferred*:
