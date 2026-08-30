@@ -20,7 +20,34 @@ godot --headless -s addons/gut/gut_cmdln.gd -gtest=res://tests/integration/test_
 # Probar la red sin dos máquinas (los `--` separan los argumentos del juego)
 godot -- --host          # terminal 1
 godot -- --join 127.0.0.1   # terminal 2
+
+# VER el juego: Movie Maker nativo escribe una secuencia de PNG del viewport
+# (extensión .png = fotogramas sueltos; .avi = MJPEG, y cuesta 2 s y 5 MB por
+# fotograma). Siempre 1920x1080: ignora --resolution. Se graban N fotogramas y se
+# elige uno; esperar "los segundos que hagan falta" y disparar es una apuesta.
+godot --path . --scene res://systems/world/world.tscn \
+      --write-movie /tmp/mov/shot.png --fixed-fps 60 --quit-after 120
+
+# Y una partida REAL de dos, que es el único caso que representa al juego:
+godot --path . --write-movie /tmp/h/f.png --fixed-fps 30 --quit-after 300 -- --host &
+sleep 3
+godot --path . --write-movie /tmp/c/f.png --fixed-fps 30 --quit-after 300 -- --join 127.0.0.1 &
 ```
+
+**Para capturar hace falta ventana.** En `--headless` la captura del viewport da
+`Parameter "t" is null` y `--write-movie` casca con SIGSEGV. Es lo primero que se
+prueba y no funciona.
+
+**El conteo de archivos es la señal, no el mensaje.** Movie Maker imprime "1 frames"
+tras escribir 120: `ls | wc -l`, igual que con los Scripts de GUT.
+
+`--write-movie` no depende del foco, del compositor ni de que la pantalla esté
+desbloqueada. `spectacle -b -n -a` (KDE) sirve para una captura suelta **con alguien
+delante**: toma la ventana ACTIVA, así que con la pantalla bloqueada devuelve la
+pantalla de bloqueo con exit 0 y sin un aviso — el fallo es indistinguible del acierto.
+
+Lo que ninguna de las dos hace es **pilotar**: para conducir a alguien por la sala se
+sustituye su `IntentSource` por uno guionizado, que es lo que ya hacen los tests.
 
 ---
 
@@ -192,7 +219,17 @@ problema no es la entidad: son los sistemas, que estaban acoplados al jugador.
 fuera del editor no lo registra en el caché de clases globales: los scripts que lo usan no
 compilan, el nodo se queda **sin script** y la escena se instancia igual. Tras añadir una
 clase, `godot --headless --import --path .`. Y para lanzar un script suelto hace falta
-`--path .`, o los autoloads no se registran y pasa lo mismo.
+`--path .`, o no se ve el proyecto y pasa lo mismo.
+
+**Con `-s`, en `_init()` todavía no hay autoloads.** El script pasado a `-s` ES el
+MainLoop, así que su `_init()` corre ANTES de que la SceneTree los instale: un frame
+después los tres están y se resuelven como identificadores globales sin más. Medido —
+la causa es el momento, no el registro, y `--path .` no cambia nada. Consecuencia
+concreta: un script `-s` que nombre un autoload en su propio texto no compila, y si de
+paso carga `world.gd` o `attacker.gd` se los lleva por delante en cascada
+(`Identifier not found: NetworkManager`), dejando los nodos SIN script. Por eso GUT
+funciona: `addons/gut/gut_cmdln.gd:25-28` espera a que haya main loop antes de cargar
+nada.
 
 **`GameEvents` no es un atajo.** Un evento entra ahí solo si emisor y receptor no pueden
 conocerse por el árbol. Si se conocen, va una señal local con `bind` — las condiciones
