@@ -185,19 +185,50 @@ func _peldanos(scaffold: RoomScaffold) -> Array[StaticBody2D]:
 	return encontrados
 
 
+## Peor subida entre dos apoyos que de verdad se encadenan.
+##
+## Ordenar las caras SOLO por Y —como se hacía aquí— es una métrica que miente:
+## dos losas a distinta altura pero separadas horizontalmente no son peldaños
+## consecutivos, y aun así se contaban como tales. Medido sobre un diseño de
+## losas alternas en el que el jugador no subía ni un peldaño, esta función
+## seguía devolviendo 71.1 px y su test seguía VERDE. Por eso ahora un apoyo
+## solo continúa la escalera si además de estar más arriba SOLAPA EN X con
+## aquel desde el que se salta.
+##
+## Un apoyo al que no se llega desde ninguno de los alcanzados devuelve INF: la
+## sala no se puede escalar, que es exactamente lo que el test debe ver.
 func _subida_maxima(scaffold: RoomScaffold) -> float:
-	var caras: Array[float] = []
+	var apoyos: Array = []
 	for peldano in _peldanos(scaffold):
-		caras.append(peldano.position.y - _extent(peldano).y * 0.5)
-	caras.sort()
-	caras.reverse()   ## de abajo arriba
+		var medida := _extent(peldano)
+		apoyos.append([
+			peldano.position.y - medida.y * 0.5,   ## la cara que se pisa
+			peldano.position.x - medida.x * 0.5,
+			peldano.position.x + medida.x * 0.5,
+		])
+	## De abajo arriba: en Godot la Y crece hacia abajo.
+	apoyos.sort_custom(func(a: Array, b: Array) -> bool: return a[0] > b[0])
 
+	## El suelo abarca la sala entera, así que solapa con todo.
+	var alcanzados: Array = [[scaffold.floor_surface_y(), -scaffold.size.x, scaffold.size.x]]
 	var peor := 0.0
-	var anterior := scaffold.floor_surface_y()
-	for cara in caras:
-		peor = maxf(peor, anterior - cara)
-		anterior = cara
-	return maxf(peor, anterior - scaffold.ceiling_surface_y())
+	var mas_alto := scaffold.floor_surface_y()
+
+	for apoyo: Array in apoyos:
+		var salto_minimo := INF
+		for previo: Array in alcanzados:
+			if previo[0] <= apoyo[0]:
+				continue   ## no está por debajo: no se salta desde ahí
+			if apoyo[2] < previo[1] or apoyo[1] > previo[2]:
+				continue   ## sin solape en X: no son consecutivos
+			salto_minimo = minf(salto_minimo, previo[0] - apoyo[0])
+		if is_inf(salto_minimo):
+			return INF
+		peor = maxf(peor, salto_minimo)
+		alcanzados.append(apoyo)
+		mas_alto = minf(mas_alto, apoyo[0])
+
+	return maxf(peor, mas_alto - scaffold.ceiling_surface_y())
 
 
 func _tramo_de_pared_derecha(scaffold: RoomScaffold) -> StaticBody2D:
