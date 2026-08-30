@@ -67,19 +67,56 @@ func test_el_hueco_lateral_se_pisa_desde_el_suelo() -> void:
 			"el hueco se apoya en el suelo: a la sala vecina se entra caminando")
 
 
-func test_el_ultimo_peldano_queda_bajo_la_abertura_superior() -> void:
-	# Un peldaño ancho pegado al techo macizo deja al jugador sin sitio para
-	# ponerse de pie: cabe tumbado y no puede saltar.
+## Sustituye a `test_el_ultimo_peldano_queda_bajo_la_abertura_superior`, que
+## codificaba el DISEÑO ("hay un peldaño en tal sitio") en vez del REQUISITO
+## ("se puede salir por arriba"). No es relajar el listón: aquel test pasaba en
+## verde mientras salir de `verdant_5` costaba acertar una ventana de coyote de
+## seis frames, y no habría visto que con el descansillo se sale de sobra.
+##
+## Barre varias posiciones de salida y las dos direcciones, y exige una FRACCIÓN
+## en vez de un caso: un test escrito a la medida del único guion que funciona
+## deja enterrado que los otros quince fallan. Medido: con descansillo salen 11
+## de 16 intentos; sin él, 2.
+func test_se_sale_por_la_abertura_superior() -> void:
 	var scaffold := _scaffold_suelto(Vector2(1280, 1280), RoomScaffold.Side.TOP)
-	var mas_alto: StaticBody2D = null
-	for cuerpo in _peldanos(scaffold):
-		if mas_alto == null or cuerpo.position.y < mas_alto.position.y:
-			mas_alto = cuerpo
-	assert_not_null(mas_alto)
+	h.setup(Vector2.ZERO, Vector2(4000, 0), false)
+	scaffold.reparent(h)
 
-	var medio_ancho: float = _extent(mas_alto).x * 0.5
-	assert_lte(absf(mas_alto.position.x) + medio_ancho, RoomScaffold.OPENING_WIDTH * 0.5 + 0.5,
-			"el último peldaño cabe dentro de la columna del hueco, no bajo el techo")
+	var techo := scaffold.ceiling_surface_y()
+	var salidas := 0
+	var intentos := 0
+
+	## El descansillo es la fila más alta: se busca en vez de calcularlo, para
+	## que el test siga midiendo lo mismo si cambia el reparto de pasos.
+	var descansillo: StaticBody2D = null
+	for cuerpo in _peldanos(scaffold):
+		if descansillo == null or cuerpo.position.y < descansillo.position.y:
+			descansillo = cuerpo
+	assert_not_null(descansillo, "hay una fila más alta")
+	var cara: float = descansillo.position.y - _extent(descansillo).y * 0.5
+
+	for partida: float in [-40.0, 0.0, 60.0, 140.0, 200.0, 260.0]:
+		for sentido: float in [-1.0, 1.0]:
+			intentos += 1
+			var jugador := h.sword_player
+			## ENCIMA del descansillo, apoyado en su cara.
+			jugador.place_at(Vector2(partida, cara - 4.0))
+			await h.tick_physics(12)
+
+			for _i in range(120):
+				await get_tree().physics_frame
+				if jugador.global_position.y < techo:
+					break   ## cruzó el techo: está fuera de la sala
+				if jugador.is_on_floor():
+					h.sword_input.set_move(sentido)
+					h.sword_input.press_jump()
+			if jugador.global_position.y < techo:
+				salidas += 1
+
+	gut.p("salidas por la abertura superior: %d de %d" % [salidas, intentos])
+	assert_gt(salidas, intentos / 3,
+			"desde el descansillo se sale por arriba en la mayoría de intentos; " +
+			"si no, una sala que solo abre arriba queda sellada")
 
 
 func test_ninguna_sala_de_las_zonas_avisa_de_configuracion() -> void:
@@ -102,7 +139,12 @@ func test_el_jugador_sube_la_escalera_de_verdad() -> void:
 	scaffold.reparent(h)
 
 	var jugador := h.sword_player
-	jugador.place_at(Vector2(0.0, scaffold.floor_surface_y() - 4.0))
+	# Bajo la escalera, que ya no está en el centro de la sala: vive a la derecha
+	# de la columna del hueco de paso para dejarla libre. Desde x=0 el jugador
+	# tendría que caminar 70 px antes de poder empezar a subir, y este piloto no
+	# sabe hacer eso — lo que mide es la escalera, no la búsqueda.
+	var eje := RoomScaffold.PLATFORM_MARGIN + RoomScaffold.PLATFORM_WIDTH * 0.5
+	jugador.place_at(Vector2(eje, scaffold.floor_surface_y() - 4.0))
 	await h.tick_physics(20)
 	assert_true(jugador.is_on_floor(), "el jugador arranca de pie en el suelo de la sala")
 
@@ -180,7 +222,11 @@ func _peldanos(scaffold: RoomScaffold) -> Array[StaticBody2D]:
 		if cuerpo == null:
 			continue
 		var medida := _extent(cuerpo)
-		if medida.x <= RoomScaffold.PLATFORM_WIDTH and medida.y <= RoomScaffold.PLATFORM_THICKNESS:
+		# Por GROSOR y no por ancho: el descansillo de la última fila es más
+		# ancho que `PLATFORM_WIDTH` y seguía siendo un peldaño. Suelo y techo
+		# miden 32 de grosor y las paredes 1044 de alto, así que este filtro
+		# solo deja pasar losas.
+		if medida.y <= RoomScaffold.PLATFORM_THICKNESS:
 			encontrados.append(cuerpo)
 	return encontrados
 
@@ -272,3 +318,68 @@ func _medir_alcance_horizontal() -> float:
 			break   ## ya aterrizó: lo que corra después no es alcance de salto
 	h.sword_input.release_all()
 	return alcance
+
+
+## --- Lo que el dueño pidió: poder caminar ---
+
+## Las losas medían 40x24 px contra un cuerpo de 28 de ancho: doce píxeles de
+## paseo. Este test es el encargo literal, y por eso mide ANDANDO en vez de
+## comprobar el ancho de la forma: una losa ancha con la que uno se cae por un
+## borde mal puesto pasaría igual una comprobación de medidas.
+func test_se_puede_caminar_sobre_una_losa() -> void:
+	var scaffold := _scaffold_suelto(Vector2(1280, 1280), RoomScaffold.Side.TOP)
+	h.setup(Vector2.ZERO, Vector2(4000, 0), false)
+	scaffold.reparent(h)
+
+	## La fila más baja, por su extremo izquierdo.
+	var losa: StaticBody2D = null
+	for cuerpo in _peldanos(scaffold):
+		if losa == null or cuerpo.position.y > losa.position.y:
+			losa = cuerpo
+	assert_not_null(losa)
+
+	var medida := _extent(losa)
+	var izquierda: float = losa.position.x - medida.x * 0.5
+	var cara: float = losa.position.y - medida.y * 0.5
+
+	var jugador := h.sword_player
+	jugador.place_at(Vector2(izquierda + 20.0, cara - 4.0))
+	await h.tick_physics(10)
+	assert_true(jugador.is_on_floor(), "el jugador se posa sobre la losa")
+
+	var partida := jugador.global_position.x
+	for _i in range(90):
+		h.sword_input.set_move(1.0)
+		await get_tree().physics_frame
+	h.sword_input.set_move(0.0)
+	await h.tick_physics(4)
+
+	var recorrido := jugador.global_position.x - partida
+	assert_gt(recorrido, 100.0,
+			"se camina 100+ px sobre una losa: recorrió %.0f" % recorrido)
+	assert_true(jugador.is_on_floor(), "y sigue sobre ella, no se ha caído")
+
+
+## --- Y que la columna del hueco siga siendo un paso ---
+
+## La escalera se mudó a la derecha justamente para dejar libre esta columna. Si
+## una losa la invadiera, el jugador se posaría encima y la sala de abajo
+## quedaría inalcanzable: se habría cambiado un encierro por otro.
+func test_se_baja_por_el_agujero_del_suelo() -> void:
+	var scaffold := _scaffold_suelto(Vector2(1280, 1280), RoomScaffold.Side.BOTTOM)
+	h.setup(Vector2.ZERO, Vector2(4000, 0), false)
+	scaffold.reparent(h)
+
+	var suelo := scaffold.floor_surface_y()
+	var jugador := h.sword_player
+	## En la columna del hueco, a media sala.
+	jugador.place_at(Vector2(0.0, suelo - 400.0))
+
+	for _i in range(180):
+		await get_tree().physics_frame
+		if jugador.global_position.y > suelo + 60.0:
+			break
+
+	assert_gt(jugador.global_position.y, suelo + 60.0,
+			"se cae por el agujero del suelo en vez de posarse en una losa")
+

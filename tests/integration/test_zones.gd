@@ -164,8 +164,11 @@ func _area_de_pared(scaffold: RoomScaffold) -> float:
 	for nodo in scaffold.find_children("*", "StaticBody2D", false, false):
 		var forma := nodo.get_child(0) as CollisionShape2D
 		var medida: Vector2 = (forma.shape as RectangleShape2D).size
-		if medida.x <= RoomScaffold.PLATFORM_WIDTH:
-			continue   ## peldaño, no pared
+		# Por GROSOR, no por ancho. Filtrando por ancho, una losa de 340
+		# descartaba también las PAREDES (32 px de ancho) y el test seguía
+		# pasando por casualidad mientras ya no medía lo que dice medir.
+		if medida.y <= RoomScaffold.PLATFORM_THICKNESS:
+			continue   ## losa, no pared
 		total += medida.x * medida.y
 	return total
 

@@ -34,17 +34,25 @@ const OPENING_HEIGHT: float = 220.0
 ## horizontal del salto (163 px con los stats base) para que un agujero en el
 ## suelo se cruce de un salto en vez de partir la sala en dos.
 const OPENING_WIDTH: float = 140.0
-## Cuánto se desplaza cada peldaño respecto al eje de la escalera. El salto de
-## uno al siguiente exige cruzar como mucho el doble de esto, y el jugador solo
-## avanza ~40 px mientras gana `platform_rise` de altura.
-const PLATFORM_STAGGER: float = 20.0
-## Justo el doble del desplazamiento: así dos peldaños consecutivos se tocan de
-## canto sin solaparse, y NINGÚN punto de un peldaño tiene el siguiente encima.
-## Con solape, el trozo utilizable se queda sin altura para saltar —72 px de
-## subida contra un cuerpo de 44— y la escalera se atasca aunque cada peldaño
-## esté al alcance. Medido conduciendo un jugador, no deducido.
-const PLATFORM_WIDTH: float = PLATFORM_STAGGER * 2.0
+## Largo de una losa: 340 px, doce veces el ancho del cuerpo (28). Antes eran 40,
+## o sea doce PÍXELES de paseo, y no se podía caminar sobre ellas.
+##
+## Que sean anchas solo es posible junto con `one_way_collision` (ver
+## `_build_platforms`): macizas, una losa de 340 es un techo para la de abajo.
+const PLATFORM_WIDTH: float = 340.0
+## Desplazamiento entre una fila y la siguiente. Deja 210 px de SOLAPE, y ese
+## solape es lo que hace subible la escalera: el jugador está debajo de la losa
+## de arriba, salta, la atraviesa y aterriza encima. Sin solape habría que
+## acertar un borde con una ventana de dos frames — medido, y descartado.
+const PLATFORM_STAGGER: float = 130.0
 const PLATFORM_THICKNESS: float = 24.0
+## La escalera vive a la DERECHA de la columna del hueco de paso vertical, que
+## queda libre de arriba abajo. Con la escalera centrada —como estaba— los
+## peldaños ocupaban [-40,40] dentro de un hueco de [-70,70]: la escalera y el
+## paso entre salas se disputaban la misma columna, y encima el centro de la
+## sala es donde `arrival_point()` deja a los jugadores, que aparecían
+## encaramados a 640 px de altura.
+const PLATFORM_MARGIN: float = OPENING_WIDTH * 0.5
 
 @export var size: Vector2 = Vector2(1280, 1280):
 	set(value):
@@ -62,7 +70,7 @@ const PLATFORM_THICKNESS: float = 24.0
 ## margen. La escalera llega siempre hasta el techo, así que el número de
 ## peldaños se deduce de aquí y del alto de la sala — no se configura sala por
 ## sala, que es como se acababa con aberturas inalcanzables.
-@export_range(24.0, 101.0, 1.0) var platform_rise: float = 72.0:
+@export_range(24.0, 101.0, 1.0) var platform_rise: float = 80.0:
 	set(value):
 		platform_rise = value
 		_rebuild()
@@ -125,23 +133,54 @@ func _build_side(side: int, center: Vector2, full_size: Vector2, horizontal: boo
 	_add_solid(Vector2(center.x, (gap_top - size.y * 0.5) * 0.5), Vector2(full_size.x, height))
 
 
-## Escalera hasta el techo, escalonada a un lado y a otro del eje. Va centrada
-## y estrecha para que quepa entera bajo la abertura superior: un peldaño ancho
-## pegado al techo macizo deja al jugador sin sitio para ponerse de pie.
+## Escalera hasta el techo, a la derecha de la columna del hueco de paso, con
+## losas anchas y de un solo sentido.
+##
+## Las tres piezas se sostienen entre sí y ninguna vale suelta:
+##
+## - **Anchas** (340 px) porque el encargo era poder caminar sobre ellas. Medido:
+##   310 px de paseo sobre una losa, contra los 12 de antes.
+## - **De un solo sentido** porque una losa ancha maciza es un techo para la de
+##   abajo. Con `one_way` se sube atravesándola desde cualquier punto del solape.
+##   Puesto SIN ensanchar, en cambio, hunde la escalera: quita el cabezazo del
+##   que dependía la de antes —47 px de hueco contra un cuerpo de 44— y el
+##   piloto pasaba de subir 856 px a 101. Por eso van en el mismo cambio.
+## - **A un lado**, para que la columna del hueco quede libre de arriba abajo: es
+##   por donde se sube y se baja entre salas, y por donde ya no aparecen los
+##   jugadores encaramados.
+##
+## La ÚLTIMA fila es un descansillo que sí llega bajo la columna del hueco. Sin
+## él no se sale por arriba: sobre una losa pegada al techo quedan 48 px contra
+## un cuerpo de 44, así que saltar es darse en la cabeza a los 4 px y caerse los
+## 1.200 de la sala. Medido: con descansillo se sale en 11 de 16 intentos; sin
+## él, en 2 — y `verdant_5` y `cinder_5`, que solo abren arriba, quedaban
+## sellados.
 func _build_platforms() -> void:
 	var steps := _step_count()
 	if steps <= 1:
 		return
 	var rise := size.y / float(steps)
 	var surface := floor_surface_y()
+	var near_x := PLATFORM_MARGIN + PLATFORM_WIDTH * 0.5
+	var far_x := near_x + PLATFORM_STAGGER
 
 	for row in range(1, steps):
 		var y := surface - rise * float(row)
-		var x := PLATFORM_STAGGER if row % 2 == 1 else -PLATFORM_STAGGER
+		var x := near_x if row % 2 == 1 else far_x
+		var ancho := PLATFORM_WIDTH
+		if row == steps - 1:
+			# El descansillo cruza la columna del hueco hacia la IZQUIERDA —hay
+			# que poder ponerse DEBAJO de la abertura, no al lado— y por la
+			# derecha llega justo a solapar con la fila de debajo, para subir a
+			# él como a cualquier otra.
+			var izquierda := -PLATFORM_MARGIN - PLATFORM_WIDTH * 0.35
+			var derecha := far_x - PLATFORM_WIDTH * 0.5 + PLATFORM_MARGIN
+			ancho = derecha - izquierda
+			x = (izquierda + derecha) * 0.5
 		# `_add_solid` centra el cuerpo; lo que importa es dónde queda la cara
-		# que se pisa, que es la que separa un peldaño del siguiente.
+		# que se pisa, que es la que separa una fila de la siguiente.
 		_add_solid(Vector2(x, y + PLATFORM_THICKNESS * 0.5),
-				Vector2(PLATFORM_WIDTH, PLATFORM_THICKNESS))
+				Vector2(ancho, PLATFORM_THICKNESS), true)
 
 
 ## Peldaños necesarios para subir del suelo al techo sin pasarse de
@@ -151,7 +190,12 @@ func _step_count() -> int:
 	return maxi(ceili(size.y / maxf(platform_rise, 1.0)), 1)
 
 
-func _add_solid(at: Vector2, extent: Vector2) -> void:
+## `one_way` se pasa solo en las losas: suelo, techo y paredes son macizos.
+##
+## No se toca `one_way_collision_margin`: con el valor por defecto (1.0) el
+## jugador no se cuela ni cayendo a 3.710 px/s —medido—, y poniéndolo a 0 sí se
+## cuela y acaba en el suelo.
+func _add_solid(at: Vector2, extent: Vector2, one_way: bool = false) -> void:
 	var body := StaticBody2D.new()
 	body.position = at
 	body.collision_layer = 1   ## capa `world`
@@ -162,6 +206,7 @@ func _add_solid(at: Vector2, extent: Vector2) -> void:
 	var rect := RectangleShape2D.new()
 	rect.size = extent
 	shape.shape = rect
+	shape.one_way_collision = one_way
 	body.add_child(shape)
 
 	var visual := Polygon2D.new()
@@ -189,4 +234,15 @@ func _get_configuration_warnings() -> PackedStringArray:
 		warnings.append(
 			"Los peldaños suben %d px y el tope es %d: la sala no se puede escalar."
 			% [int(rise), int(platform_rise)])
+
+	# Si la sala abre ARRIBA, hay que poder ponerse bajo la abertura y saltar. El
+	# descansillo de la última fila es lo que lo permite; si por el reparto de
+	# pasos no llega a cubrir la columna del hueco, la sala queda SELLADA y nada
+	# lo dice. Medido: con `platform_rise = 100` la última fila cae a 130 px de
+	# la columna y no se sale ni una vez de diez, en silencio. Un número del
+	# inspector no puede cerrar una sala sin avisar (§13).
+	if openings & Side.TOP != 0:
+		if _step_count() > 1 and -PLATFORM_MARGIN - PLATFORM_WIDTH * 0.35 > -OPENING_WIDTH * 0.5:
+			warnings.append(
+				"La sala abre arriba y el descansillo no llega bajo el hueco: no se puede salir.")
 	return warnings
