@@ -20,6 +20,8 @@ extends Node
 ## hospeda. Por eso el impacto se detecta donde ocurre pero se **encamina** al
 ## peer que manda sobre la víctima, que es el único que lo aplica.
 
+const ComponentLookup := preload("res://components/component_lookup.gd")
+
 ## Se encajó un golpe. `amount` es el daño ya aplicado.
 signal damage_taken(amount: int, from: Node, hit_position: Vector2)
 ## Pide desplazar al dueño por el impacto.
@@ -37,12 +39,17 @@ signal hit_ignored(from: Node)
 
 
 func _ready() -> void:
+	# Por nombre y, si no aparece, POR TIPO. Mientras fue solo por nombre, una
+	# entidad que colgara su `Hurtbox` de un nodo intermedio —el caso por zonas
+	# que la propia `Hurtbox` documenta— se quedaba sin resolutor de daño: un
+	# `push_warning` y a partir de ahí inmune, en silencio.
+	var entity := get_parent()
 	if hurtbox == null:
-		hurtbox = _sibling("Hurtbox") as Hurtbox
+		hurtbox = ComponentLookup.find(entity, "Hurtbox", "Hurtbox") as Hurtbox
 	if health == null:
-		health = _sibling("HealthComponent") as HealthComponent
+		health = ComponentLookup.find(entity, "HealthComponent", "HealthComponent") as HealthComponent
 	if stats == null:
-		stats = _sibling("StatsComponent") as StatsComponent
+		stats = ComponentLookup.find(entity, "StatsComponent", "StatsComponent") as StatsComponent
 
 	if hurtbox != null:
 		hurtbox.wounded.connect(_on_wounded)
@@ -138,9 +145,3 @@ func _resolve(raw_damage: int, knockback: float, direction: Vector2,
 	if knockback > 0.0:
 		knockback_requested.emit(direction * knockback * resistance)
 
-
-func _sibling(node_name: String) -> Node:
-	var parent := get_parent()
-	if parent == null:
-		return null
-	return parent.get_node_or_null(node_name)

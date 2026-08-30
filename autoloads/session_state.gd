@@ -24,6 +24,7 @@ const KIT_SCENES: Dictionary = {
 ## Peer del host en ENet. Siempre 1.
 const HOST_PEER: int = 1
 
+# ephemeral: el reparto dura lo que la partida y lo vacía `clear()`.
 ## peer_id -> Kit. Vacío = reparto determinista (ver `kit_for`).
 var kit_by_peer: Dictionary = {}
 

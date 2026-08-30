@@ -34,8 +34,14 @@ func after_each() -> void:
 
 ## Coloca un enemigo. `scripted` sustituye su IA por un guion de test, que es la
 ## prueba de que la IA es intercambiable por nodo igual que la del jugador.
-func _spawn_enemy(at: Vector2, scripted: bool = false) -> Enemy:
+##
+## `archetype` se asigna ANTES de entrar en el árbol a propósito: quien reparte
+## sus números entre los componentes es `_apply_archetype`, y corre en `_ready`.
+func _spawn_enemy(at: Vector2, scripted: bool = false,
+		archetype: EnemyArchetype = null) -> Enemy:
 	var instance := EnemyScene.instantiate() as Enemy
+	if archetype != null:
+		instance.archetype = archetype
 	if scripted:
 		var original := instance.get_node("IntentSource")
 		original.name = "IntentSourceRetired"
@@ -174,3 +180,49 @@ func test_al_morir_queda_derrotado_y_no_se_libera() -> void:
 	assert_eq(enemy.state_machine.current_state, Enemy.State.DOWNED,
 			"queda derrotado, y ese estado sí se replica")
 	assert_false(enemy.hurtbox.active, "un enemigo derrotado ya no encaja golpes")
+
+
+## --- Que dos enemigos no se pisen el cuerpo ---
+
+## Un arquetipo de test. Se construye en memoria y no como `.tres`: un recurso
+## nuevo en el repo sería contenido especulativo, y aquí solo hace falta que sus
+## medidas NO coincidan con las del recluta.
+func _archetype_de_prueba(body: Vector2, vista: float) -> EnemyArchetype:
+	var archetype := EnemyArchetype.new()
+	archetype.display_name = "Prueba"
+	archetype.body_size = body
+	archetype.max_health = 6
+	archetype.detection_range = vista
+	archetype.leash_range = vista * 1.5
+	archetype.attacks = []
+	return archetype
+
+
+func test_dos_enemigos_distintos_no_se_pisan_el_cuerpo() -> void:
+	# El recluta de la escena, tal cual: 44x44 y 260 de vista.
+	enemy = _spawn_enemy(Vector2(300.0, 0.0))
+	var grande := _spawn_enemy(Vector2(700.0, 0.0), false,
+			_archetype_de_prueba(Vector2(120.0, 120.0), 900.0))
+	await h.tick_physics(2)
+
+	# Se lee LA FORMA, no el arquetipo: el arquetipo siempre dice la verdad, y
+	# lo que se pisaba era el `RectangleShape2D` que ambas instancias
+	# compartían. Sin `resource_local_to_scene`, el último en montarse le
+	# imponía su cuerpo, su hurtbox y su vista al primero.
+	var cuerpo := (enemy.body_shape.shape as RectangleShape2D).size
+	assert_eq(cuerpo, Vector2(44.0, 44.0),
+			"el recluta conserva su cuerpo aunque monte otro enemigo mayor")
+
+	var hurt_shape := enemy.hurtbox.get_node("CollisionShape2D") as CollisionShape2D
+	assert_eq((hurt_shape.shape as RectangleShape2D).size, Vector2(44.0, 44.0),
+			"y su hurtbox, o encajaría golpes que no le tocan")
+
+	var ojos := enemy.perception.get_node("CollisionShape2D") as CollisionShape2D
+	assert_almost_eq((ojos.shape as CircleShape2D).radius, 260.0, 0.1,
+			"y su radio de visión")
+
+	# Y el grande sigue siendo grande: la separación va en los dos sentidos.
+	assert_eq((grande.body_shape.shape as RectangleShape2D).size, Vector2(120.0, 120.0),
+			"el segundo enemigo conserva el suyo")
+
+	grande.queue_free()

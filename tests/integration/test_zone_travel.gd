@@ -137,3 +137,68 @@ func test_un_companero_parado_dentro_no_encierra_a_nadie() -> void:
 
 	assert_eq(zonas.size(), 2,
 			"con el compañero quieto dentro, quien sale y entra sigue pudiendo viajar")
+
+
+## --- Cuando la zona de destino no carga ---
+##
+## `_load_zone` desconectaba las puertas de la zona ACTUAL del HUD antes de saber
+## si la carga iba a salir bien. En el camino de fallo la zona vieja sobrevive, y
+## sobrevivía muda: el aviso de "esperando al otro jugador" —que existe para
+## explicar por qué una puerta no se abre— no volvía a aparecer en toda la
+## partida. Y como `traversal_requested` sí seguía conectada, el jugador podía
+## repetir el intento, y cada repetición desconectaba lo ya desconectado.
+
+func _puertas_conectadas_al_hud() -> int:
+	var total := 0
+	for door in world.current_zone.doors():
+		if door.waiting_changed.is_connected(world.hud.set_door_wait):
+			total += 1
+	return total
+
+
+## Una escena que existe y carga, pero cuya raíz no es una `Zone`. Es el vector
+## limpio: ejercita la misma salida temprana sin el ruido del cargador.
+const ESCENA_QUE_NO_ES_ZONA := "res://ui/hud/hud.tscn"
+
+
+func test_una_zona_que_no_carga_no_deja_mudas_las_puertas_de_la_actual() -> void:
+	var puertas: int = world.current_zone.doors().size()
+	assert_gt(puertas, 0, "la zona de partida tiene puertas")
+	assert_eq(_puertas_conectadas_al_hud(), puertas, "y arrancan conectadas al HUD")
+
+	var zona_antes: Zone = world.current_zone
+	world._load_zone(ESCENA_QUE_NO_ES_ZONA, &"")
+
+	assert_push_error("no tiene raíz Zone", "la carga fallida se avisa en voz alta")
+	assert_eq(world.current_zone, zona_antes, "la zona actual sobrevive al fallo")
+	assert_eq(_puertas_conectadas_al_hud(), puertas,
+			"y sus puertas siguen hablando con el HUD")
+
+
+## El segundo intento no puede desconectar lo que ya desconectó el primero: eso
+## era un error de motor por puerta y por intento, indefinidamente.
+func test_reintentar_una_carga_fallida_no_desconecta_dos_veces() -> void:
+	var puertas: int = world.current_zone.doors().size()
+	for _i in range(3):
+		world._load_zone(ESCENA_QUE_NO_ES_ZONA, &"")
+
+	assert_engine_error_count(0,
+			"ningún 'nonexistent connection': no se desconecta lo ya desconectado")
+	assert_eq(_puertas_conectadas_al_hud(), puertas,
+			"tres intentos fallidos seguidos dejan las conexiones intactas")
+	for e in get_errors():
+		e.handled = true
+
+
+## Y el camino bueno sigue funcionando después de fallar: la zona buena entra, y
+## no hereda las conexiones de la anterior.
+func test_tras_un_fallo_una_zona_valida_sigue_cargando() -> void:
+	world._load_zone(ESCENA_QUE_NO_ES_ZONA, &"")
+	world._load_zone("res://level/zones/zone_cinder.tscn", &"")
+	await wait_physics_frames(2)
+
+	assert_eq(str(world.current_zone.zone_id), "cinder", "la zona buena entra igual")
+	assert_eq(_puertas_conectadas_al_hud(), world.current_zone.doors().size(),
+			"y sus puertas quedan conectadas")
+	for e in get_errors():
+		e.handled = true

@@ -53,7 +53,7 @@ registrada o si alguien pasa de 400 líneas (§6).
 
 ## Trampa recurrente: verde no significa funcionando
 
-Ha pasado **cinco veces** en este proyecto. Los tests pasaban y la funcionalidad no existía:
+Ha pasado **siete veces** en este proyecto. Los tests pasaban y la funcionalidad no existía:
 
 1. `room_scaffold.gd` no compilaba. Un error de parseo deja al nodo **sin script** sin
    romper la instanciación de la escena: las salas quedaban sin suelo y la suite seguía
@@ -73,6 +73,24 @@ Ha pasado **cinco veces** en este proyecto. Los tests pasaban y la funcionalidad
    cargas de zona en cuatro segundos, en bucle. La suite daba 151/151 porque **ningún
    test cruzaba una puerta** — solo se podía descubrir cuando la geometría del punto 4
    dejó de ser intransitable.
+
+6. El empuje del golpe que te mata se guardaba en `_pending_impulse` y no se gastaba
+   nunca: la rama `DOWNED` de `Player._physics_process` retornaba antes del único sitio
+   que lo consumía. Y el golpe letal llega SIEMPRE con el jugador ya caído, porque
+   `HealthComponent.take_damage` emite `depleted` dentro de la llamada y `DamageReceiver`
+   pide el empuje once líneas después. Segundo y medio más tarde, al revivir, la cola
+   salía entera: medido, (363, -200) y 42 px de deriva. La suite daba 176/176 porque
+   **ningún test mataba a un jugador con empuje y lo revivía**.
+7. Las formas de colisión de `enemy.tscn` eran sub-recursos **compartidos entre
+   instancias**, y `_apply_body_size` las escribe desde el arquetipo: el último enemigo
+   en entrar al árbol le imponía su cuerpo, su hurtbox y su radio de visión a todos los
+   demás — y el `Polygon2D`, que no es recurso compartido, se quedaba con el suyo, así
+   que el bicho acababa con un cuerpo de 120 y un dibujo de 44. La promesa "un enemigo
+   nuevo es un `.tres`" no se sostenía, y **no se veía porque solo había un arquetipo**.
+   Se arregla con `resource_local_to_scene`, no con código. Va en las **cuatro** formas,
+   incluida la de la garra, que hoy nadie escribe desde el arquetipo: el día que el
+   alcance del golpe salga del dato —`attacks` ya está ahí— el fallo vuelve idéntico, y
+   con la documentación diciendo que estaba resuelto.
 
 **Consecuencias prácticas:**
 
@@ -98,6 +116,10 @@ Ha pasado **cinco veces** en este proyecto. Los tests pasaban y la funcionalidad
   una puerta, y quitar un `CollisionObject2D` ahí está prohibido. Creerle al comentario y
   condicionar la espera a que hubiera red tumbaba los cinco tests de cruce y llenaba la
   consola de ~1.800 errores. Ahora la carga va diferida siempre y por su razón real.
+- **Un fallo que solo aparece con dos, no aparece con uno.** Los sub-recursos compartidos
+  y el reparto de reaparición son la misma figura: con una sola instancia el código está
+  bien. Cuando algo se configura por datos, el test que sirve monta **dos** con datos
+  distintos.
 - **Ejecuta el juego de verdad** antes de dar algo por terminado. Los tres primeros
   fallos aparecieron al lanzar host y cliente, no en la suite. El cuarto ni siquiera:
   arrancaba limpio en ambos extremos y solo salió al medir la geometría contra el
@@ -140,10 +162,13 @@ no lo coloca `_place_players`.
 components/          Reutilizables, sin conocer a su dueño
   combat/            AttackData (Resource) · Attacker · DamageReceiver
   hitbox · hurtbox · guard_box · health_component · stats_component · state_machine
+  component_lookup   Cómo una entidad encuentra sus piezas (sin `class_name`)
 characters/player/   Player (orquestador delgado) · Locomotion · IntentSource
   kits/              PlayerKit (Nodo) → SwordKit · ShieldKit
+    attacks/         Un .tres (AttackData) por golpe
 characters/enemy/    Enemy · EnemyArchetype (Resource) · AIIntentSource · Perception
   archetypes/        Un .tres por tipo de enemigo
+  attacks/           Sus AttackData, junto a los del jugador en forma
 level/systems/       Zone · RoomBounds · ZoneDoor · RoomScaffold (todos @tool)
 level/zones/         zone_verdant · zone_cinder (5 salas cuadradas cada una)
 systems/             world/ · network/ (lobby) · camera/
@@ -186,6 +211,9 @@ Por orden de lo que más desbloquea:
 2. **Progresión.** El mecanismo existe (`StatModifierNode`); faltan las habilidades y las
    puertas que las exijan.
 3. **Guardado.** No hay nada: ni `ResourceSaver`, ni `user://`. Es el corazón del género.
+   Decidida ya la **forma**, no la fecha: guarda el host, un archivo, estado del mundo — el detalle
+   y el porqué, en `ARCHITECTURE-MAP.md` → *Deferred*. Va **después** de la progresión: sin
+   habilidades no hay esquema que inventar.
 4. **Mapa.**
 5. **Tileset y arte.** Todo son `Polygon2D`. `RoomScaffold` es geometría provisional y
    está marcado para retirarse cuando haya `TileMapLayer` con terrain sets.

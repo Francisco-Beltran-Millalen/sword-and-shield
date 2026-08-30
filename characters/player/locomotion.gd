@@ -9,7 +9,8 @@ extends Node
 ## nodos ese arbitraje desaparece: la locomoción siempre manda sobre el
 ## movimiento, y los kits piden impulsos que el Player suma (§2, §4).
 ##
-## No guarda referencia a su Player: lo recibe en cada llamada (§15).
+## No guarda referencia a su Player: lo recibe en cada llamada (§1: la
+## dependencia apunta hacia abajo, y un componente no se agarra a su dueño).
 
 ## Margen tras salir de una plataforma en el que el salto todavía cuenta.
 @export var coyote_time: float = 0.10

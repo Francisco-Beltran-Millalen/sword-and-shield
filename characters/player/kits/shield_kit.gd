@@ -17,9 +17,9 @@ extends PlayerKit
 ## Empuje hacia atrás al encajar un bloqueo normal.
 @export var block_recoil: float = 90.0
 
-@onready var guard_box: GuardBox = $GuardBox
-
 var _guarding: bool = false
+
+@onready var guard_box: GuardBox = $GuardBox
 
 
 func _ready() -> void:
@@ -45,10 +45,6 @@ func tick(player: Node, intent: PlayerIntent, _delta: float) -> void:
 func on_interrupted(player: Node) -> void:
 	_lower()
 	super.on_interrupted(player)
-
-
-func animation_override() -> StringName:
-	return &"guard" if _guarding else &""
 
 
 ## Lo consulta el Player para escalar la velocidad. Se expone como consulta en

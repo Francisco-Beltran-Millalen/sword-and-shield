@@ -157,3 +157,62 @@ func test_una_entidad_sin_hurtbox_no_estorba() -> void:
 	attacker.attack(1)
 	await wait_seconds(0.25)
 	pass_test("un cuerpo sin hurtbox se ignora sin romper nada")
+
+
+## --- La entidad encuentra sus piezas aunque no sean hermanas ---
+
+## `Hurtbox` documenta como caso soportado que una hurtbox cuelgue de un `Node2D`
+## intermedio (golpes por zona: cabeza, torso, pies) y expone su campo `zone`
+## para eso. Mientras `DamageReceiver` buscó a su hurtbox por NOMBRE entre sus
+## hermanos, esa estructura lo dejaba sin nada que escuchar: soltaba un
+## `push_warning` y la entidad se quedaba inmune, en silencio.
+func test_el_resolutor_encuentra_una_hurtbox_que_no_es_hermana() -> void:
+	# El maniquí de `before_each` comparte sitio con este y el golpe es de un solo
+	# objetivo (`max_targets = 1`). Se le apaga la hurtbox: una hurtbox inactiva
+	# no gasta el cupo del golpe — la hitbox descarta antes de contarla.
+	dummy_receiver.hurtbox.active = false
+
+	var body := CharacterBody2D.new()
+	body.name = "ManiquiPorZonas"
+
+	var health := HealthScript.new() as HealthComponent
+	health.name = "HealthComponent"
+	health.max_health = 10
+	health.invulnerability_seconds = 0.0
+	body.add_child(health)
+
+	# La pieza del caso: un nodo intermedio entre la entidad y su hurtbox.
+	var zonas := Node2D.new()
+	zonas.name = "Zonas"
+	body.add_child(zonas)
+
+	var hurtbox := HurtboxScript.new() as Hurtbox
+	hurtbox.name = "Hurtbox"
+	hurtbox.zone = &"cabeza"
+	hurtbox.collision_layer = LAYER_ENEMY_HURTBOX
+	hurtbox.collision_mask = 0
+	hurtbox.health_component = health
+	var shape := CollisionShape2D.new()
+	var rect := RectangleShape2D.new()
+	rect.size = Vector2(60, 60)
+	shape.shape = rect
+	hurtbox.add_child(shape)
+	zonas.add_child(hurtbox)
+
+	# Sin asignar `receiver.hurtbox` a mano: que la busque él, que es el punto.
+	var receiver := ReceiverScript.new() as DamageReceiver
+	receiver.name = "DamageReceiver"
+	receiver.health = health
+	body.add_child(receiver)
+
+	add_child_autofree(body)
+	body.global_position = Vector2(34, -24)
+	await get_tree().process_frame
+
+	assert_eq(receiver.hurtbox, hurtbox,
+			"el resolutor encuentra su hurtbox aunque cuelgue de un intermedio")
+
+	attacker.attack(1)
+	await wait_seconds(0.5)
+	assert_lt(health.current_health, 10,
+			"y el golpe llega a descontar salud: la cadena está cerrada")

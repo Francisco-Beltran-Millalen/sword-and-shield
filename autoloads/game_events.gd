@@ -8,7 +8,7 @@ extends Node
 ## con una escena fija; un metroidvania tiene decenas de salas que entran y salen
 ## del árbol, y ese cableado habría que rehacerlo en cada transición.
 ##
-## REGLA DE USO (§9 de la constitución): esto NO es un atajo para saltarse el
+## REGLA DE USO (§1 de la constitución): esto NO es un atajo para saltarse el
 ## árbol de escenas. Un evento entra aquí solo si cumple las tres condiciones:
 ##
 ##   1. Su emisor y su receptor no se conocen ni pueden conocerse por el árbol.

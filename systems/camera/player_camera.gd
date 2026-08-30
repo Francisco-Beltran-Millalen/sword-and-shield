@@ -41,6 +41,10 @@ func _ready() -> void:
 ## local queda activa; el motor usa la `Camera2D` con `enabled` del viewport.
 func set_local(is_local: bool) -> void:
 	enabled = is_local
+	# La cámara remota deja de procesar del todo, en vez de correr cada frame
+	# para salir por el `return` de `_physics_process` (§13: que lo apague el
+	# motor, no un `if`).
+	set_physics_process(is_local)
 	if is_local:
 		make_current()
 

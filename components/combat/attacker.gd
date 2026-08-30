@@ -18,6 +18,8 @@ extends Node
 ## Nada de contadores de frames en GDScript: el *cuándo* es del
 ## `AnimationPlayer`, el *qué* es del `AttackData`.
 
+const ComponentLookup := preload("res://components/component_lookup.gd")
+
 ## Empezó un ataque. `index` es su posición en `attacks`.
 signal attack_started(data: AttackData, index: int)
 ## Terminó el ataque (encadene o no).
@@ -158,24 +160,11 @@ func _finish() -> void:
 	chain_ended.emit()
 
 
-## Busca una pieza de la entidad: primero un hermano con ese nombre, y si no
-## aparece, el primer nodo de ese tipo bajo la entidad.
-##
-## La segunda pasada existe porque la hitbox no siempre puede ser hermana. En el
-## enemigo cuelga del nodo de visuales, que es lo que se voltea al cambiar de
-## lado; una hitbox hija directa del `CharacterBody2D` no tendría desde dónde
-## voltearse y el bicho solo golpearía a la derecha. Buscar por tipo es lo que
-## permite que este componente sirva a estructuras de escena distintas, que es
-## justo lo que promete.
+## Busca una pieza de la entidad. La búsqueda vive en `ComponentLookup` porque
+## es la misma que hacen `DamageReceiver` y `Hurtbox`, y las tres copias habían
+## divergido.
 func _find_component(node_name: String, type_name: String) -> Node:
-	var parent := get_parent()
-	if parent == null:
-		return null
-	var direct := parent.get_node_or_null(node_name)
-	if direct != null:
-		return direct
-	var found := parent.find_children("*", type_name, true, false)
-	return found[0] if not found.is_empty() else null
+	return ComponentLookup.find(get_parent(), node_name, type_name)
 
 
 func _on_animation_finished(_anim: StringName) -> void:
@@ -183,8 +172,27 @@ func _on_animation_finished(_anim: StringName) -> void:
 		_finish()
 
 
+## Un golpe que conecta se anuncia dos veces y no es redundante: la señal local
+## es para el dueño (el kit, el enemigo), y el bus es para quien no puede
+## conocerlo — el hit-stop, el temblor de pantalla, el audio.
+##
+## Se emite AQUÍ y no en cada dueño a propósito. Mientras lo hacía solo el
+## `SwordKit`, el enemigo reutilizaba este mismo `Attacker` y sus golpes no
+## llegaban al bus: el día que hubiera hit-stop, la espada sacudiría la cámara y
+## la garra no. Un emisor en vez de uno por entidad, y cualquier cosa que use un
+## `Attacker` —una trampa, un jefe— queda cubierta sin escribir nada.
+##
+## Sí, esto ata un componente reutilizable a un autoload. Las tres condiciones de
+## admisión de `GameEvents` se cumplen —emisor y receptor no pueden conocerse por
+## el árbol, sobrevive a las transiciones, y admite cero receptores—, que es
+## justo el caso para el que ese bus existe.
 func _on_hit(hurtbox: Hurtbox, hit_position: Vector2) -> void:
-	hit_landed.emit(hurtbox, hit_position, current_attack())
+	var data := current_attack()
+	hit_landed.emit(hurtbox, hit_position, data)
+	# Cada volumen resuelve su propia entidad: el atacante no es la hitbox y la
+	# víctima no es la hurtbox.
+	var origen: Node = hitbox.attacker() if hitbox != null else null
+	GameEvents.hit_landed.emit(origen, hurtbox.entity(), data.damage if data != null else 0)
 
 
 func _on_guarded(guard: GuardBox, hit_position: Vector2) -> void:

@@ -55,4 +55,4 @@ func clear_edges() -> void:
 func facing() -> int:
 	if absf(move) < 0.1:
 		return 0
-	return signi(int(signf(move)))
+	return int(signf(move))

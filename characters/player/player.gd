@@ -30,15 +30,6 @@ enum State {
 @export_range(0, 1) var player_index: int = 0
 @export var display_name: String = "P1"
 
-@onready var stats: StatsComponent = $StatsComponent
-@onready var health: HealthComponent = $HealthComponent
-@onready var state_machine: StateMachine = $StateMachine
-@onready var locomotion: Locomotion = $Locomotion
-@onready var intent_source: IntentSource = $IntentSource
-@onready var damage_receiver: DamageReceiver = $DamageReceiver
-@onready var visuals: Node2D = $Visuals
-@onready var camera: PlayerCamera = $PlayerCamera
-
 var kit: PlayerKit
 ## Sala en la que está. La escribe `enter_room`; la leen el guardado y el HUD.
 var current_room: StringName = &""
@@ -66,6 +57,15 @@ var replicated_facing: int:
 			return
 		_facing = value
 		_apply_facing_visuals()
+
+@onready var stats: StatsComponent = $StatsComponent
+@onready var health: HealthComponent = $HealthComponent
+@onready var state_machine: StateMachine = $StateMachine
+@onready var locomotion: Locomotion = $Locomotion
+@onready var intent_source: IntentSource = $IntentSource
+@onready var damage_receiver: DamageReceiver = $DamageReceiver
+@onready var visuals: Node2D = $Visuals
+@onready var camera: PlayerCamera = $PlayerCamera
 
 
 func _ready() -> void:
@@ -106,16 +106,18 @@ func is_local_player() -> bool:
 	return is_multiplayer_authority()
 
 
-## Solo el peer con autoridad simula y ve por esta cámara. Los personajes
-## remotos apagan su cámara y su lectura de teclado: su posición y su estado
-## llegan replicados por el `MultiplayerSynchronizer`.
+## Solo el peer con autoridad ve por esta cámara. Su posición y su estado llegan
+## replicados por el `MultiplayerSynchronizer`.
+##
+## Aquí había además un `PROCESS_MODE_DISABLED` sobre el `IntentSource`, con un
+## comentario que decía apagar "la lectura de teclado" del personaje remoto.
+## Medido: no apagaba nada. `poll()` es una llamada directa y el nodo no declara
+## `_process` ni `_input`, así que el process mode no lo toca. Lo que de verdad
+## deja quieto al remoto es el `return` de `_physics_process`, que nunca llega a
+## pedirle el intent.
 func _apply_authority() -> void:
-	var local := is_local_player()
 	if camera != null:
-		camera.set_local(local)
-	if intent_source != null:
-		intent_source.set_process_mode(
-			Node.PROCESS_MODE_INHERIT if local else Node.PROCESS_MODE_DISABLED)
+		camera.set_local(is_local_player())
 
 
 func _physics_process(delta: float) -> void:
@@ -141,6 +143,15 @@ func _physics_process(delta: float) -> void:
 		# movía el cuerpo a mano, duplicando la locomoción y dejando dos
 		# escritores de `velocity` (§4) — y un caído en el aire se quedaba
 		# flotando, porque la rama propia no aplicaba gravedad.
+		#
+		# El caído TAMBIÉN encaja el empuje pendiente, y por eso se consume aquí
+		# y no solo en el camino de abajo: el golpe que mata llega siempre con el
+		# jugador ya en DOWNED —`HealthComponent.take_damage` emite `depleted`
+		# dentro de la llamada y `DamageReceiver` pide el empuje once líneas
+		# después—, así que sin esto la cola no se gastaba nunca. Medido: se
+		# guardaba hasta la reaparición y el revivido salía disparado a
+		# (363, -200). Es lo mismo que hace el enemigo, que nunca lo tuvo.
+		_consume_pending_impulse()
 		locomotion.tick(self, stats, _idle_intent, delta)
 		return
 
@@ -151,9 +162,9 @@ func _physics_process(delta: float) -> void:
 			kit.on_action_pressed(self, intent)
 		kit.tick(self, intent, delta)
 
-	if _pending_impulse != Vector2.ZERO:
-		velocity += _pending_impulse
-		_pending_impulse = Vector2.ZERO
+	# Después del kit a propósito: la arremetida del combo nace en
+	# `kit.on_action_pressed` y tiene que salir en su mismo frame.
+	_consume_pending_impulse()
 
 	var speed_scale := 1.0
 	if kit != null:
@@ -176,6 +187,16 @@ func apply_impulse(impulse: Vector2) -> void:
 	_pending_impulse += impulse
 
 
+## Vacía la cola de empujes sobre `velocity`. Un solo consumidor para los dos
+## caminos —vivo y caído—: mientras hubo uno solo, el del jugador vivo, el golpe
+## letal se quedaba en la cola para siempre.
+func _consume_pending_impulse() -> void:
+	if _pending_impulse == Vector2.ZERO:
+		return
+	velocity += _pending_impulse
+	_pending_impulse = Vector2.ZERO
+
+
 ## Entró en una sala: reencuadra la cámara a sus límites. La llama la
 ## `RoomBounds` correspondiente. Solo surte efecto en el personaje local — el
 ## remoto lleva la cámara apagada.
@@ -193,6 +214,7 @@ func enter_room(room_id: StringName, bounds: Rect2) -> void:
 func place_at(point: Vector2) -> void:
 	global_position = point
 	velocity = Vector2.ZERO
+	_pending_impulse = Vector2.ZERO
 	locomotion.reset()
 
 

@@ -35,19 +35,10 @@ enum State {
 
 @export var archetype: EnemyArchetype
 
-@onready var stats: StatsComponent = $StatsComponent
-@onready var health: HealthComponent = $HealthComponent
-@onready var state_machine: StateMachine = $StateMachine
-@onready var locomotion: Locomotion = $Locomotion
-@onready var intent_source: IntentSource = $IntentSource
-@onready var damage_receiver: DamageReceiver = $DamageReceiver
-@onready var perception: Perception = $Perception
-@onready var attacker: Attacker = $Attacker
-@onready var visuals: Node2D = $Visuals
-@onready var body_shape: CollisionShape2D = $CollisionShape2D
-@onready var hurtbox: Hurtbox = $Hurtbox
-
 var _facing: int = 1
+## Intent vacío para cuando el enemigo no manda (derrotado). Se reutiliza la
+## instancia, como en `Player`: construir uno por frame es basura por cadáver.
+var _idle_intent := PlayerIntent.new()
 
 ## Estado replicado, igual que en el jugador: un entero, no catorce campos.
 var replicated_state: int:
@@ -63,6 +54,18 @@ var replicated_facing: int:
 			return
 		_facing = value
 		_apply_facing_visuals()
+
+@onready var stats: StatsComponent = $StatsComponent
+@onready var health: HealthComponent = $HealthComponent
+@onready var state_machine: StateMachine = $StateMachine
+@onready var locomotion: Locomotion = $Locomotion
+@onready var intent_source: IntentSource = $IntentSource
+@onready var damage_receiver: DamageReceiver = $DamageReceiver
+@onready var perception: Perception = $Perception
+@onready var attacker: Attacker = $Attacker
+@onready var visuals: Node2D = $Visuals
+@onready var body_shape: CollisionShape2D = $CollisionShape2D
+@onready var hurtbox: Hurtbox = $Hurtbox
 
 
 func _ready() -> void:
@@ -87,7 +90,7 @@ func _physics_process(delta: float) -> void:
 		return
 
 	if state_machine.is_in(State.DOWNED):
-		locomotion.tick(self, stats, _blank_intent(), delta)
+		locomotion.tick(self, stats, _idle_intent, delta)
 		return
 
 	var ai := intent_source as AIIntentSource
@@ -221,11 +224,6 @@ func _settle_state() -> void:
 		state_machine.transition_to(State.ATTACK)
 		return
 	state_machine.transition_to(State.IDLE if absf(velocity.x) < 8.0 else State.WALK)
-
-
-func _blank_intent() -> PlayerIntent:
-	var intent := PlayerIntent.new()
-	return intent
 
 
 func _on_damage_taken(_amount: int, _from: Node, _hit_position: Vector2) -> void:

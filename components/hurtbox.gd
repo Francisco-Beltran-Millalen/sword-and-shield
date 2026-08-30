@@ -11,6 +11,8 @@ extends Area2D
 ## `zone` permite golpes por zona (cabeza, torso, pies) sin lógica extra:
 ## se ponen varias hurtboxes sobre el mismo cuerpo con etiquetas distintas.
 
+const ComponentLookup := preload("res://components/component_lookup.gd")
+
 ## Recibió un impacto. El dueño decide daño final, empuje y reacción.
 signal wounded(hitbox: Hitbox, hit_position: Vector2)
 
@@ -33,8 +35,8 @@ func _ready() -> void:
 		# i-frames, en silencio. Ese caso por zonas es justo el que promete el
 		# campo `zone` de más abajo.
 		var host: Node = owner if owner != null else get_parent()
-		if host != null:
-			health_component = host.get_node_or_null("HealthComponent") as HealthComponent
+		health_component = ComponentLookup.find(
+				host, "HealthComponent", "HealthComponent") as HealthComponent
 		if health_component == null:
 			push_warning("Hurtbox '%s' sin HealthComponent: asígnalo en el inspector o los i-frames no se respetarán." % name)
 

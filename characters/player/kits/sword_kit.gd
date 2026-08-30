@@ -24,7 +24,6 @@ func _ready() -> void:
 	attacker.attack_started.connect(_on_attack_started)
 	attacker.chain_ended.connect(_on_chain_ended)
 	attacker.lunge_requested.connect(_on_lunge_requested)
-	attacker.hit_landed.connect(_on_hit_landed)
 
 
 func on_action_pressed(player: Node, intent: PlayerIntent) -> void:
@@ -37,13 +36,6 @@ func on_interrupted(player: Node) -> void:
 	if attacker != null:
 		attacker.interrupt()
 	super.on_interrupted(player)
-
-
-func animation_override() -> StringName:
-	if attacker == null or not attacker.is_attacking():
-		return &""
-	var data := attacker.current_attack()
-	return data.animation if data != null else &""
 
 
 func _resolve_facing(player: Node, intent: PlayerIntent) -> int:
@@ -68,10 +60,3 @@ func _on_lunge_requested(impulse: Vector2) -> void:
 	# contrario justo cuando el jugador miraba a la izquierda.
 	impulse_requested.emit(impulse)
 
-
-func _on_hit_landed(hurtbox: Hurtbox, _position: Vector2, data: AttackData) -> void:
-	# Ni `get_parent()` como atacante ni `hurtbox.get_parent()` como víctima: el
-	# kit no tiene por qué saber de quién cuelga ni cómo arma su escena la
-	# víctima. Cada volumen resuelve su propia entidad.
-	var origen: Node = attacker.hitbox.attacker() if attacker.hitbox != null else null
-	GameEvents.hit_landed.emit(origen, hurtbox.entity(), data.damage if data != null else 0)

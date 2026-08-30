@@ -14,7 +14,7 @@ extends Node2D
 ## `set_physics_process(false)`. Ver §2 en la constitución.
 ##
 ## El kit NO guarda una referencia a su Player: lo recibe como parámetro en cada
-## llamada (§1, §15). El Player llama hacia abajo; el kit señaliza hacia arriba.
+## llamada (§1). El Player llama hacia abajo; el kit señaliza hacia arriba.
 
 ## El kit quiere mover al jugador (arremetida, retroceso de guardia). El Player
 ## decide si lo aplica — el kit nunca escribe `velocity` ajena (§2).
@@ -47,12 +47,6 @@ func on_action_pressed(_player: Node, _intent: PlayerIntent) -> void:
 ## El jugador recibió daño; el kit cancela lo que estuviera haciendo.
 func on_interrupted(_player: Node) -> void:
 	_set_busy(false)
-
-
-## Nombre del estado de animación que el kit quiere imponer, o `&""` si no
-## impone ninguno y manda la locomoción.
-func animation_override() -> StringName:
-	return &""
 
 
 ## Multiplicador de velocidad que impone el kit (guardia alta, arma pesada).

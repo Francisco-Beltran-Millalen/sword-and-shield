@@ -15,13 +15,13 @@ const PlayerScene := preload("res://characters/player/player.tscn")
 const LOBBY_SCENE := "res://systems/network/lobby.tscn"
 const FIRST_ZONE := "res://level/zones/zone_verdant.tscn"
 
+var current_zone: Zone
+var _changing_zone: bool = false
+
 @onready var players_root: Node2D = $Players
 @onready var zone_root: Node2D = $ZoneRoot
 @onready var spawner: MultiplayerSpawner = $PlayerSpawner
 @onready var hud: Hud = $Hud
-
-var current_zone: Zone
-var _changing_zone: bool = false
 
 
 func _ready() -> void:
@@ -66,15 +66,6 @@ func _unhandled_input(event: InputEvent) -> void:
 ## Carga una zona y descarga la anterior. La zona es la unidad de carga: dentro
 ## de ella no se vuelve a cargar nada.
 func _load_zone(zone_path: String, from_door: StringName) -> void:
-	# El aviso de puerta no puede sobrevivir a la puerta que lo pidió: un `Area2D`
-	# que sale del árbol suelta sus `body_exited`, así que la puerta moribunda
-	# emitiría un último `waiting_changed` que llegaría ya en la zona nueva, donde
-	# no hay nada que lo apague. Se corta la conexión antes de destruirla.
-	if current_zone != null:
-		for door in current_zone.doors():
-			door.waiting_changed.disconnect(hud.set_door_wait)
-	hud.set_door_wait(0, 0)
-
 	# Se instancia ANTES de destruir la anterior: si la carga falla a media
 	# función, `current_zone` se quedaba apuntando a un nodo ya liberado y la
 	# siguiente llamada le pedía sus puertas.
@@ -87,6 +78,29 @@ func _load_zone(zone_path: String, from_door: StringName) -> void:
 	if loaded == null:
 		push_error("La escena '%s' no tiene raíz Zone." % zone_path)
 		return
+
+	# El aviso de puerta no puede sobrevivir a la puerta que lo pidió: un `Area2D`
+	# que sale del árbol suelta sus `body_exited`, así que la puerta moribunda
+	# emitiría un último `waiting_changed` que llegaría ya en la zona nueva, donde
+	# no hay nada que lo apague. Se corta la conexión antes de destruirla.
+	#
+	# DESPUÉS de las dos validaciones, y no antes: una carga fallida deja viva la
+	# zona actual, y desconectarla en ese camino la dejaba con sus puertas mudas
+	# para el HUD el resto de la partida. Peor: como `traversal_requested` sigue
+	# conectada, el jugador vuelve a pisar la puerta, y el siguiente intento
+	# desconectaba lo ya desconectado — un "Attempt to disconnect a nonexistent
+	# connection" por puerta y por intento, para siempre. Aquí la carga ya está
+	# comprometida y el `remove_child` sigue viniendo después, que es lo que el
+	# párrafo de arriba pide.
+	#
+	# Lo que este orden NO arregla, a sabiendas: el viaje se puede reintentar en
+	# bucle si la zona destino no carga nunca, porque `_perform_zone_change`
+	# suelta `_changing_zone` pase lo que pase. Dejarlo puesto congelaría los
+	# viajes para siempre, que es peor que un `push_error` repetido.
+	if current_zone != null:
+		for door in current_zone.doors():
+			door.waiting_changed.disconnect(hud.set_door_wait)
+	hud.set_door_wait(0, 0)
 
 	for child in zone_root.get_children():
 		zone_root.remove_child(child)

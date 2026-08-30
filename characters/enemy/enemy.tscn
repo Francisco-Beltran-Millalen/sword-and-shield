@@ -15,15 +15,19 @@
 [ext_resource type="Resource" path="res://characters/enemy/archetypes/grunt.tres" id="13"]
 
 [sub_resource type="RectangleShape2D" id="BodyShape"]
+resource_local_to_scene = true
 size = Vector2(44, 44)
 
 [sub_resource type="RectangleShape2D" id="HurtShape"]
+resource_local_to_scene = true
 size = Vector2(44, 44)
 
 [sub_resource type="RectangleShape2D" id="ClawShape"]
+resource_local_to_scene = true
 size = Vector2(34, 30)
 
 [sub_resource type="CircleShape2D" id="EyesShape"]
+resource_local_to_scene = true
 radius = 260.0
 
 [sub_resource type="SceneReplicationConfig" id="ReplicationConfig"]

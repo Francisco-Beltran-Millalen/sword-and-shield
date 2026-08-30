@@ -12,7 +12,7 @@ extends IntentSource
 ## igual que conducen un jugador: basta sustituir este nodo.
 ##
 ## No guarda referencia a su enemigo: recibe el cuerpo y la vista por parámetro
-## en cada `decide()` (§1, §15).
+## en cada `decide()` (§1).
 
 enum Mode {
 	PATROL,   ## Ronda alrededor de donde apareció.
