@@ -40,10 +40,10 @@ room_id = &"verdant_2"
 size = Vector2(1280, 1280)
 
 [node name="Enemy" parent="Rooms/Room2" instance=ExtResource("5")]
-position = Vector2(1600, 600)
+position = Vector2(320, 600)
 
 [node name="Enemy2" parent="Rooms/Room2" instance=ExtResource("5")]
-position = Vector2(900, 600)
+position = Vector2(-380, 600)
 
 [node name="Scaffold" type="Node2D" parent="Rooms/Room2"]
 script = ExtResource("3")
@@ -62,7 +62,7 @@ room_id = &"verdant_3"
 size = Vector2(1280, 1280)
 
 [node name="Enemy" parent="Rooms/Room3" instance=ExtResource("5")]
-position = Vector2(2400, 600)
+position = Vector2(-160, 600)
 
 [node name="Scaffold" type="Node2D" parent="Rooms/Room3"]
 script = ExtResource("3")

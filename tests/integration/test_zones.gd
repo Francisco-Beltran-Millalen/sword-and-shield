@@ -179,3 +179,40 @@ func _scaffold_de(room_id: StringName) -> RoomScaffold:
 		if bounds != null and bounds.room_id == room_id:
 			return node as RoomScaffold
 	return null
+
+
+## --- Que lo colocado en una sala esté DENTRO de esa sala ---
+
+## `position` es LOCAL, y cada nodo `Room*` ya lleva el suyo: quien escribe ahí
+## coordenadas de mundo suma los dos offsets. Los tres enemigos de Verdant
+## estaban así — dos caían en `verdant_3` en vez de `verdant_2`, y el tercero no
+## caía en ninguna sala: medido, a los 300 fotogramas iba por y=18986 bajando a
+## 7.163 px/s, para siempre.
+##
+## Nada lo veía. La escena se instancia igual, el enemigo existe, y la suite
+## seguía verde: no había un solo test que preguntara DÓNDE acaban las cosas.
+##
+## Se afirma sobre la posición AUTORADA, sin simular: los enemigos patrullan
+## (`patrol_radius`), así que uno legítimamente pegado al borde de su sala puede
+## salirse tras unos frames y haría fallar al test por moverse, no por estar mal.
+func test_lo_que_cuelga_de_una_sala_cae_dentro_de_esa_sala() -> void:
+	for ruta in [
+		"res://level/zones/zone_verdant.tscn",
+		"res://level/zones/zone_cinder.tscn",
+	]:
+		var escena: Node = load(ruta).instantiate()
+		add_child_autofree(escena)
+
+		var salas: Array = escena.find_children("*", "RoomBounds", true, false)
+		assert_gt(salas.size(), 0, "%s tiene salas" % ruta.get_file())
+
+		for cuerpo in escena.find_children("*", "CharacterBody2D", true, false):
+			var punto: Vector2 = cuerpo.global_position
+			var donde := &""
+			for sala in salas:
+				if (sala.world_rect() as Rect2).has_point(punto):
+					donde = sala.room_id
+					break
+			assert_ne(donde, &"",
+					"%s: '%s' en %s no cae dentro de ninguna sala"
+					% [ruta.get_file(), cuerpo.name, punto])

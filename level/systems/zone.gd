@@ -100,4 +100,46 @@ func _get_configuration_warnings() -> PackedStringArray:
 	if default_spawn_room != &"" and not seen.has(default_spawn_room):
 		warnings.append("`default_spawn_room` ('%s') no existe en esta zona." % default_spawn_room)
 
+	# Un cuerpo colocado con coordenadas de MUNDO bajo una sala que ya tiene su
+	# propio `position` acaba en otra sala, o en ninguna: los dos offsets se
+	# suman. Pasó con los tres enemigos de Verdant —uno de ellos caía al vacío
+	# indefinidamente, medido a 7.163 px/s— y no lo veía nadie: la escena se
+	# instancia igual y la suite seguía verde.
+	#
+	# El aviso vive AQUÍ y no solo en un test porque el error se comete en el
+	# editor, arrastrando el nodo (§13: la validación de contenido es
+	# `_get_configuration_warnings`; "avisos que solo se ven al jugar" es el
+	# antipatrón que esa misma fila registra).
+	for body in find_children("*", "CharacterBody2D", true, false):
+		var home := _room_of(body)
+		if home == null:
+			continue
+		var landed := &""
+		for candidate in all:
+			if candidate.world_rect().has_point(body.global_position):
+				landed = candidate.room_id
+				break
+		if landed == &"":
+			warnings.append(
+				"'%s' cuelga de '%s' y no cae DENTRO DE NINGUNA sala: `position` es local, ¿está en coordenadas de mundo?"
+				% [body.name, home.room_id])
+		elif landed != home.room_id:
+			warnings.append(
+				"'%s' cuelga de '%s' pero cae en '%s': `position` es local, ¿está en coordenadas de mundo?"
+				% [body.name, home.room_id, landed])
+
 	return warnings
+
+
+## La `RoomBounds` de la rama de la que cuelga un nodo, o `null` si no cuelga de
+## ninguna sala. Se sube por el árbol en vez de exigir una profundidad concreta:
+## un enemigo puede colgar de la sala o de un contenedor dentro de ella.
+func _room_of(node: Node) -> RoomBounds:
+	var walker := node.get_parent()
+	while walker != null and walker != self:
+		for child in walker.get_children():
+			var bounds := child as RoomBounds
+			if bounds != null:
+				return bounds
+		walker = walker.get_parent()
+	return null
