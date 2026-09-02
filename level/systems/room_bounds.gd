@@ -166,4 +166,11 @@ func _on_body_entered(body: Node2D) -> void:
 	# enemigos y NPC, que es justo lo que su nombre promete cubrir.
 	if body.has_method("enter_room"):
 		body.enter_room(room_id, world_rect())
+		# Al bus solo el ocupante LOCAL, y solo por la sala: quien mira esto —hoy
+		# el overlay de depuración, mañana el mapa— cuelga del `World` y no puede
+		# conocer a una sala que vive dentro de la zona, que es la primera de las
+		# tres condiciones de `GameEvents` (§1). Los remotos no cuentan: cada peer
+		# encuadra al suyo, así que "en qué sala estoy" es una pregunta local.
+		if body.is_multiplayer_authority():
+			GameEvents.room_entered.emit(room_id)
 	occupant_entered.emit(room_id, body)

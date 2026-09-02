@@ -21,6 +21,22 @@ extends Camera2D
 @export var look_ahead_x: float = 40.0
 ## Suavidad del adelanto horizontal (mayor = más rápido).
 @export var look_ahead_speed: float = 3.0
+## Margen que se deja por DEBAJO del suelo de la sala al aplicar sus límites.
+##
+## Sin esto, el límite inferior es el borde de la sala y el suelo está pegado a
+## él, así que al pisarlo la cámara topa y el personaje queda en el píxel 1054 de
+## 1080 —medido—: el 97,6 % de la altura, con toda la pantalla por encima de él.
+##
+## Sólo abajo: arriba nadie se queja, y ampliar por los cuatro lados enseñaría
+## mundo por encima del techo sin ganar nada.
+##
+## Lo que se ve en ese margen es el fondo de parallax de la zona, el mismo que se
+## ve por toda la sala, así que no hay corte. Se probó a taparlo alargando el
+## DIBUJO del suelo hacia abajo y se descartó: las salas se apilan de 1280 en
+## 1280 —cuatro pares entre las dos zonas— y ese faldón invadía 240 px del
+## interior de la sala de abajo, que es peor que lo que arreglaba.
+@export var bounds_padding_bottom: float = 180.0
+
 ## A quién sigue. Vacío = el padre, que es el caso normal (la cámara cuelga de
 ## su personaje). Explicitarlo permite encuadrar otra cosa —una cinemática, un
 ## jefe— sin reparentar la cámara.
@@ -88,4 +104,4 @@ func apply_room_bounds(bounds: Rect2) -> void:
 	limit_left = int(bounds.position.x)
 	limit_top = int(bounds.position.y)
 	limit_right = int(bounds.end.x)
-	limit_bottom = int(bounds.end.y)
+	limit_bottom = int(bounds.end.y + bounds_padding_bottom)

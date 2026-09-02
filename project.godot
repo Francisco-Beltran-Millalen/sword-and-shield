@@ -26,7 +26,14 @@ SessionState="*res://autoloads/session_state.gd"
 window/size/viewport_width=1920
 window/size/viewport_height=1080
 window/stretch/mode="canvas_items"
-window/stretch/aspect="expand"
+; `keep` y no `expand`. Medido con un `SubViewport`: con `expand`, en cuanto la
+; ventana pasa de ~17:9 la vista supera los 1280 px de la sala, los `limit_*` de
+; la cámara dejan de poder cumplirse y esta se CLAVA en el centro —deja de seguir
+; en X— enseñando 160 px de las salas vecinas por lado en 21:9 y 435 en 3440x1440.
+; En un metroidvania eso regala el descubrimiento a quien tenga el monitor más
+; ancho. `keep` fija la proporción y todos ven exactamente lo mismo, al precio de
+; barras: lo resuelve el motor, sin tocar el zoom ni la cámara (§13).
+window/stretch/aspect="keep"
 
 [editor_plugins]
 

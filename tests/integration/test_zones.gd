@@ -185,6 +185,59 @@ func test_un_lado_abierto_deja_menos_pared_que_uno_cerrado() -> void:
 			"cada abertura recorta pared: cuatro dejan menos que una")
 
 
+func test_el_lado_izquierdo_tiene_apoyos() -> void:
+	# Con la escalera mudada a la derecha, la mitad izquierda quedó vacía de
+	# pared a pared: 694 px medidos, contra una pared interior en ±624. Una sala
+	# que es un rectángulo liso no se puede evaluar ni construir encima.
+	var andamio := _scaffold_de(&"verdant_1")
+	assert_not_null(andamio)
+	var izquierda := _losas_a_la_izquierda(andamio)
+	assert_gt(izquierda.size(), 0, "el lado izquierdo necesita dónde subirse")
+
+
+func test_los_apoyos_no_invaden_la_columna_de_paso() -> void:
+	# `[-70, 70]` es el paso vertical entre salas Y donde `arrival_point()` deja
+	# a los jugadores. Un apoyo ahí los devuelve a empezar la partida encaramados,
+	# que es el fallo que mudar la escalera vino a arreglar.
+	for zona: PackedScene in [VerdantScene, CinderScene]:
+		var escena := zona.instantiate() as Zone
+		add_child_autofree(escena)
+		for nodo in escena.find_children("*", "RoomScaffold", true, false):
+			for losa in _losas_a_la_izquierda(nodo as RoomScaffold):
+				var medida: Vector2 = (losa.get_child(0).shape as RectangleShape2D).size
+				assert_lt(losa.position.x + medida.x * 0.5, -RoomScaffold.OPENING_WIDTH * 0.5,
+						"'%s' asoma dentro de la columna de paso" % losa.name)
+
+
+func test_el_apoyo_mas_bajo_se_alcanza_de_un_salto_desde_el_suelo() -> void:
+	# 101 px es la altura de salto con los stats base, medida conduciendo a un
+	# jugador en `test_room_traversal.gd`. Un apoyo por encima de eso es
+	# decoración inalcanzable, y no avisa de nada.
+	var andamio := _scaffold_de(&"verdant_1")
+	var suelo := andamio.floor_surface_y()
+	var mas_bajo := -INF
+	for losa in _losas_a_la_izquierda(andamio):
+		var medida: Vector2 = (losa.get_child(0).shape as RectangleShape2D).size
+		mas_bajo = maxf(mas_bajo, losa.position.y - medida.y * 0.5)
+	assert_lt(suelo - mas_bajo, 101.0,
+			"desde el suelo hay que llegar al primer apoyo de un salto")
+
+
+## Losas (por GROSOR, como el resto de la suite) que caen a la izquierda del eje.
+func _losas_a_la_izquierda(scaffold: RoomScaffold) -> Array[StaticBody2D]:
+	var encontradas: Array[StaticBody2D] = []
+	for hijo in scaffold.get_children():
+		var cuerpo := hijo as StaticBody2D
+		if cuerpo == null:
+			continue
+		var medida: Vector2 = (cuerpo.get_child(0).shape as RectangleShape2D).size
+		if medida.y > RoomScaffold.PLATFORM_THICKNESS:
+			continue
+		if cuerpo.position.x < 0.0:
+			encontradas.append(cuerpo)
+	return encontradas
+
+
 func _area_de_pared(scaffold: RoomScaffold) -> float:
 	var total := 0.0
 	for nodo in scaffold.find_children("*", "StaticBody2D", false, false):

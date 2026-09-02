@@ -19,6 +19,9 @@ const HurtboxScript := preload("res://components/hurtbox.gd")
 const HitboxScript := preload("res://components/hitbox.gd")
 const HealthScript := preload("res://components/health_component.gd")
 const ReceiverScript := preload("res://components/combat/damage_receiver.gd")
+const PlayerScene := preload("res://characters/player/player.tscn")
+const SwordKitScene := preload("res://characters/player/kits/sword_kit.tscn")
+const ShieldKitScene := preload("res://characters/player/kits/shield_kit.tscn")
 
 ## Un peer que no está en ninguna sesión. Encaminarle un golpe sería un
 ## `rpc_id` a un id desconocido.
@@ -205,3 +208,45 @@ func _montar_hitbox() -> Hitbox:
 	forma.shape = rect
 	hitbox.add_child(forma)
 	return hitbox
+
+## --- La autoridad de lo que se cuelga en runtime ---
+##
+## `set_multiplayer_authority` propaga a los hijos que existen EN EL MOMENTO de
+## la llamada, y `World._spawn_player` equipa el kit DESPUÉS de fijarla. El
+## `Kit`, su `Hitbox` y su `Attacker` se quedaban con el 1 por defecto mientras
+## el `Player` valía el `peer_id` del cliente.
+##
+## No rompía nada porque hoy nadie lee esa autoridad — y por eso hacía falta un
+## test: el día que algo pregunte "¿simulo yo este golpe?", la espada del cliente
+## se queda muda y la suite sigue en verde.
+##
+## Se montan DOS jugadores con peers DISTINTOS a propósito: con uno solo, y más
+## si es el 1, un kit sin autoridad propagada es indistinguible de uno correcto.
+
+func test_el_kit_hereda_la_autoridad_de_su_jugador() -> void:
+	for peer: int in [77, 91]:
+		var jugador := PlayerScene.instantiate() as Player
+		add_child_autofree(jugador)
+		jugador.set_owning_peer(peer)
+		jugador.equip_kit(SwordKitScene)
+
+		assert_eq(jugador.get_multiplayer_authority(), peer)
+		for ruta: String in ["Kit", "Kit/Hitbox", "Kit/Attacker"]:
+			var pieza := jugador.get_node_or_null(ruta)
+			assert_not_null(pieza, "el kit debe montar '%s'" % ruta)
+			assert_eq(pieza.get_multiplayer_authority(), peer,
+					"'%s' se quedó con otra autoridad que su jugador (peer %d)" % [ruta, peer])
+
+
+func test_cambiar_de_kit_no_reabre_el_agujero() -> void:
+	# El intercambio en caliente está aplazado, pero `equip_kit` ya reemplaza, y
+	# el segundo kit se cuelga igual de tarde que el primero.
+	var jugador := PlayerScene.instantiate() as Player
+	add_child_autofree(jugador)
+	jugador.set_owning_peer(77)
+	jugador.equip_kit(SwordKitScene)
+	jugador.equip_kit(ShieldKitScene)
+
+	var kit := jugador.get_node_or_null("Kit")
+	assert_not_null(kit)
+	assert_eq(kit.get_multiplayer_authority(), 77, "el kit nuevo también hereda")

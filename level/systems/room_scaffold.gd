@@ -54,6 +54,22 @@ const PLATFORM_THICKNESS: float = 24.0
 ## encaramados a 640 px de altura.
 const PLATFORM_MARGIN: float = OPENING_WIDTH * 0.5
 
+## Repisas del lado IZQUIERDO, que estaba vacío de pared a pared.
+##
+## Medido: con la escalera mudada a la derecha para liberar la columna de paso,
+## las losas ocupan x ∈ [70, 540] contra una pared interior en ±624, o sea 694 px
+## —más de la mitad del ancho— sin un solo apoyo. Una sala que es un rectángulo
+## liso no se puede evaluar ni construir encima.
+##
+## Deliberadamente CORTAS: llegan a 144 px del suelo de 1280, así que no abren
+## una segunda ruta al techo — eso cambiaría el diseño de las salas, que se
+## escalan por un sitio. Y no invaden la columna [-70, 70], que es el paso
+## vertical entre salas y donde `arrival_point()` deja a los jugadores.
+const LEDGES: Array[Vector3] = [
+	Vector3(-290.0, 420.0, 72.0),   ## centro x, ancho, altura sobre el suelo
+	Vector3(-400.0, 300.0, 144.0),
+]
+
 @export var size: Vector2 = Vector2(1280, 1280):
 	set(value):
 		size = Vector2(maxf(value.x, 256.0), maxf(value.y, 256.0))
@@ -136,6 +152,7 @@ func _rebuild() -> void:
 	_build_side(Side.LEFT, Vector2(-half.x, 0.0), costado, false, wall_color)
 	_build_side(Side.RIGHT, Vector2(half.x, 0.0), costado, false, wall_color)
 	_build_platforms()
+	_build_ledges()
 	update_configuration_warnings()
 
 
@@ -213,6 +230,18 @@ func _build_platforms() -> void:
 		# que se pisa, que es la que separa una fila de la siguiente.
 		_add_solid(Vector2(x, y + PLATFORM_THICKNESS * 0.5),
 				Vector2(ancho, PLATFORM_THICKNESS), true, platform_color)
+
+
+## Apoyos del lado izquierdo. Mismo material que la escalera —losas de un solo
+## sentido— para que la regla de la sala siga siendo una sola: lo claro se
+## atraviesa desde abajo.
+func _build_ledges() -> void:
+	var surface := floor_surface_y()
+	for ledge in LEDGES:
+		if ledge.y > size.x - WALL_THICKNESS * 2.0:
+			continue
+		_add_solid(Vector2(ledge.x, surface - ledge.z + PLATFORM_THICKNESS * 0.5),
+				Vector2(ledge.y, PLATFORM_THICKNESS), true, platform_color)
 
 
 ## Peldaños necesarios para subir del suelo al techo sin pasarse de

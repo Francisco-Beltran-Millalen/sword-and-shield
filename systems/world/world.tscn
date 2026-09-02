@@ -1,7 +1,8 @@
-[gd_scene load_steps=3 format=3]
+[gd_scene load_steps=4 format=3]
 
 [ext_resource type="Script" path="res://systems/world/world.gd" id="1"]
 [ext_resource type="PackedScene" path="res://ui/hud/hud.tscn" id="2"]
+[ext_resource type="PackedScene" path="res://ui/debug/debug_overlay.tscn" id="3"]
 
 [node name="World" type="Node2D"]
 script = ExtResource("1")
@@ -14,3 +15,5 @@ script = ExtResource("1")
 spawn_path = NodePath("../Players")
 
 [node name="Hud" parent="." instance=ExtResource("2")]
+
+[node name="DebugOverlay" parent="." instance=ExtResource("3")]

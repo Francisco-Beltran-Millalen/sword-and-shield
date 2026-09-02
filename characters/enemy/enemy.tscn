@@ -1,4 +1,4 @@
-[gd_scene load_steps=18 format=3]
+[gd_scene load_steps=19 format=3]
 
 [ext_resource type="Script" path="res://characters/enemy/enemy.gd" id="1"]
 [ext_resource type="Script" path="res://components/stats_component.gd" id="2"]
@@ -13,6 +13,7 @@
 [ext_resource type="Script" path="res://components/combat/attacker.gd" id="11"]
 [ext_resource type="AnimationLibrary" path="res://characters/enemy/enemy_animations.tres" id="12"]
 [ext_resource type="Resource" path="res://characters/enemy/archetypes/grunt.tres" id="13"]
+[ext_resource type="Script" path="res://components/state_animator.gd" id="14"]
 
 [sub_resource type="RectangleShape2D" id="BodyShape"]
 resource_local_to_scene = true
@@ -117,6 +118,16 @@ libraries = {
 
 [node name="Attacker" type="Node" parent="."]
 script = ExtResource("11")
+
+; Hace que el gesto de golpe se vea también en el peer que NO simula: el estado
+; viaja por `replicated_state` y su llegada dispara `state_changed`. La ventana
+; de daño no se abre ahí — `Attacker.open_window()` ignora a quien no empezó el
+; golpe— así que el remoto ve el gesto y no duplica el daño.
+[node name="StateAnimator" type="Node" parent="."]
+script = ExtResource("14")
+animations = {
+2: &"enemy_strike"
+}
 
 [node name="MultiplayerSynchronizer" type="MultiplayerSynchronizer" parent="."]
 replication_config = SubResource("ReplicationConfig")

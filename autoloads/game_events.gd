@@ -26,8 +26,8 @@ extends Node
 @warning_ignore("unused_signal")
 signal zone_change_requested(zone_path: String, door_id: StringName)
 ## Un jugador local entró en una sala nueva. La sala NO se carga: es una región
-## dentro de la zona, y esto solo significa que cambió el encuadre.
-@warning_ignore("unused_signal")
+## dentro de la zona, y esto solo significa que cambió el encuadre. La emite
+## `RoomBounds`, que vive dentro de la zona y no puede conocer a quien mira.
 signal room_entered(room_id: StringName)
 ## Terminó de cargar una zona y los jugadores ya están colocados. La zona es la
 ## unidad de carga; esto sí es un evento de carga real.

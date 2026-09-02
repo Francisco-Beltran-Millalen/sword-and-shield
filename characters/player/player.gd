@@ -254,6 +254,15 @@ func equip_kit(kit_scene: PackedScene) -> void:
 		return
 	instance.name = "Kit"
 	add_child(instance)
+	# La autoridad NO se hereda: `set_multiplayer_authority` la propaga a los
+	# hijos que existen EN EL MOMENTO de la llamada, y el kit se cuelga después
+	# —`World._spawn_player` llama a `set_owning_peer` y luego a `equip_kit`—, así
+	# que se quedaba con el 1 por defecto. Medido: `Player` 77, `Kit/Hitbox` 1.
+	# Hoy nadie lee esa autoridad y por eso no rompía nada; el día que alguien
+	# pregunte "¿simulo yo este golpe?" la espada del cliente se queda muda. Se
+	# reaplica aquí y no en el `World` para que un cambio de kit en caliente
+	# tampoco abra el agujero.
+	instance.set_multiplayer_authority(get_multiplayer_authority())
 	_bind_kit()
 
 

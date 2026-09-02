@@ -114,6 +114,15 @@ func _load_zone(zone_path: String, from_door: StringName) -> void:
 		door.waiting_changed.connect(hud.set_door_wait)
 
 	GameEvents.zone_entered.emit(current_zone.zone_id)
+	# La zona se le EMPUJA al overlay, no se la dejamos consultar (§5): es su
+	# padre quien la carga. La sala y los golpes sí le llegan por el bus, porque
+	# sus emisores viven dentro de la zona y de un kit y no pueden conocerlo.
+	# Por nombre de nodo y por método: el overlay no tiene `class_name` —una
+	# clase global obliga a reimportar antes de que compile quien la usa— y esto
+	# permite además quitarlo de la escena sin tocar código.
+	var overlay := get_node_or_null("DebugOverlay")
+	if overlay != null and overlay.has_method(&"set_zone"):
+		overlay.call(&"set_zone", current_zone.zone_id)
 
 	# La puerta por la que se llega tiene que saber que los recibió, o los verá
 	# entrar y pedirá volver por donde se vino. Se avisa ANTES de colocarlos.
@@ -132,21 +141,36 @@ func _load_zone(zone_path: String, from_door: StringName) -> void:
 ## replica en modo ALWAYS—, y ese vaivén de salir y volver a entrar es lo que la
 ## puerta de llegada lee como un cruce.
 func _place_players(at: Vector2) -> void:
-	var offset := -40.0
 	for child in players_root.get_children():
 		# Por método y no por tipo: cualquier cosa reubicable vale, igual que en
 		# `_on_entity_downed`.
 		if not child.has_method("place_at"):
 			continue
 		if not child.is_multiplayer_authority():
-			offset += 80.0
 			continue
-		# Solo el reparto lateral. El desplazamiento de -40 px en Y que había aquí
-		# era el parche de cuando el punto de llegada era el CENTRO de la sala: ahora
-		# `RoomBounds.spawn_point()` devuelve la cara que se pisa, y levantar 40 px
-		# sobre ella deja a los dos jugadores flotando — medido grabando.
-		child.place_at(at + Vector2(offset, 0.0))
-		offset += 80.0
+		child.place_at(_spread(at, child))
+
+
+## Dónde cae cada uno dentro de un punto de llegada compartido.
+##
+## Un solo sitio para las TRES colocaciones —aparecer, cambiar de zona y revivir—
+## porque cada una tenía la suya: el spawn calculaba `index * 80 - 40`, el reparto
+## contaba con un acumulador y la reaparición no repartía nada, así que dos
+## caídos a la vez resucitaban en la MISMA coordenada, uno dentro del otro.
+##
+## El índice sale de `player_index`, que ya existe y lo escribe el spawner. NO de
+## `get_index()`: el índice de árbol se recoloca cuando un jugador se desconecta
+## —medido: al sacar al de en medio, el tercero pasa de 2 a 1— y movería el punto
+## de reaparición del que queda sin ninguna razón. Se pregunta por la PROPIEDAD y
+## no por el tipo, así que algo sin `player_index` cae en el centro y no revienta.
+##
+## Solo desplaza en X. El -40 en Y que hubo aquí era el parche de cuando el punto
+## de llegada era el CENTRO de la sala: con `RoomBounds.spawn_point()` devolviendo
+## la cara que se pisa, dejaba a los dos flotando — medido grabando.
+func _spread(at: Vector2, entity: Node) -> Vector2:
+	var declared: Variant = entity.get(&"player_index")
+	var index: int = declared if declared is int else 0
+	return at + Vector2(float(index) * 80.0 - 40.0, 0.0)
 
 
 func _on_traversal_requested(target_zone: String, target_door: StringName) -> void:
@@ -258,7 +282,7 @@ func _spawn_player(data: Variant) -> Node:
 	player.tree_exiting.connect(hud.clear_slot.bind(slot))
 
 	if current_zone != null:
-		player.position = current_zone.arrival_point() + Vector2(index * 80 - 40, -40)
+		player.position = _spread(current_zone.arrival_point(), player)
 	return player
 
 
@@ -269,8 +293,11 @@ func _spawn_player(data: Variant) -> Node:
 ## una puerta el caído reaparece en la zona nueva. Es lo que se quiere —la zona
 ## vieja ya no está cargada para nadie—, pero conviene saberlo antes de tocarlo.
 ##
-## Recibe la entidad por `bind`, así que sirve igual para un enemigo que deba
-## reaparecer: no comprueba tipos ni busca por índice.
+## Recibe la entidad por `bind` y no comprueba tipos, así que la forma serviría
+## para un enemigo. Hoy NO le llega ninguno: la conexión a `depleted` solo se
+## hace en `_spawn_player`, y `Enemy` no la reproduce. Cuando llegue, además,
+## `arrival_point()` no es su sitio — un enemigo reaparece en su sala, no en la
+## de entrada de la zona.
 func _on_entity_downed(_source: Node, entity: Node) -> void:
 	# Solo la corre el peer que manda sobre el caído. `_spawn_player` se ejecuta
 	# en todos, y `HealthComponent` reemite `depleted` al llegar la salud
@@ -285,8 +312,19 @@ func _on_entity_downed(_source: Node, entity: Node) -> void:
 	if entity.has_method("revive_full"):
 		entity.revive_full()
 	if current_zone != null and entity.has_method("place_at"):
-		entity.place_at(current_zone.arrival_point())
+		entity.place_at(_spread(current_zone.arrival_point(), entity))
 
 
 func _on_session_ended(_reason: String) -> void:
+	# `NetworkManager.reset()` restaura el peer offline, cuyo id es 1, pero los
+	# personajes conservan la autoridad del `peer_id` que tenían: en el ex-cliente
+	# nadie simula ya su propio cuerpo, que se queda congelado hasta que el cambio
+	# de escena se lo lleva. Dura uno o dos frames y no rompe nada, pero devolverla
+	# cuesta esto y quita una rareza de la lista.
+	#
+	# Lo hace el `World`, que es quien tiene delante a los jugadores: el
+	# `NetworkManager` no conoce entidades ni rutas de escena, y §3 lo mantiene así.
+	for child in players_root.get_children():
+		if child.is_inside_tree():
+			child.set_multiplayer_authority(multiplayer.get_unique_id())
 	get_tree().change_scene_to_file(LOBBY_SCENE)

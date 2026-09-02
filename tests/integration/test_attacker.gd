@@ -69,6 +69,9 @@ func test_la_hitbox_toma_los_valores_del_ataque_en_curso() -> void:
 	# El tercer golpe pega más fuerte: la hitbox debe reconfigurarse por golpe.
 	var heavy: AttackData = attacker.attacks[2]
 	attacker._index = 2
+	# `_busy` a mano: `open_window()` ignora a quien no empezó el golpe, que es lo
+	# que impide que el gesto replicado en el peer remoto abra una ventana real.
+	attacker._busy = true
 	attacker.open_window()
 
 	assert_eq(hitbox.damage, heavy.damage)

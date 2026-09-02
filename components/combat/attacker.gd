@@ -103,6 +103,18 @@ func interrupt() -> void:
 
 ## Abre la ventana de daño. La llama la animación en su primer frame activo.
 func open_window() -> void:
+	# La ventana la abre quien EMPEZÓ el golpe. Sin esto, cualquiera que
+	# reproduzca la animación abre una ventana de daño real: las pistas de método
+	# viven en el `AnimationLibrary`, así que un `StateAnimator` replicando el
+	# gesto en el peer remoto haría que el golpe se detectase y se encaminase dos
+	# veces. Medido antes del guardia: `hitbox_activa=true` con `busy=false`, y
+	# con los datos de `attacks[0]` aunque el golpe real fuera el tercero.
+	#
+	# Se pregunta por `_busy` y no por la autoridad a propósito: la autoridad de
+	# un kit se fija al equiparlo y esto es un componente reutilizable que no
+	# tiene por qué saber de red. Vale igual para jugador, enemigo o trampa.
+	if not _busy:
+		return
 	var data := current_attack()
 	if hitbox == null or data == null:
 		return

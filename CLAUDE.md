@@ -37,6 +37,10 @@ godot --path . --write-movie /tmp/c/f.png --fixed-fps 30 --quit-after 300 -- --j
 godot --path . --debug-collisions --scene res://systems/world/world.tscn
 ```
 
+**F3 abre el panel de depuración** (zona, sala, peer, golpes). En una GRABACIÓN no
+sirve —`--write-movie` no tiene teclado—: hay que poner `visible_al_arrancar` a
+`true` en el `DebugOverlay` de `world.tscn` antes de grabar.
+
 **Para capturar hace falta ventana.** En `--headless` la captura del viewport da
 `Parameter "t" is null` y `--write-movie` casca con SIGSEGV. Es lo primero que se
 prueba y no funciona.
@@ -83,7 +87,7 @@ registrada o si alguien pasa de 400 líneas (§6).
 
 ## Trampa recurrente: verde no significa funcionando
 
-Ha pasado **ocho veces** en este proyecto. Los tests pasaban y la funcionalidad no existía:
+Ha pasado **nueve veces** en este proyecto. Los tests pasaban y la funcionalidad no existía:
 
 1. `room_scaffold.gd` no compilaba. Un error de parseo deja al nodo **sin script** sin
    romper la instanciación de la escena: las salas quedaban sin suelo y la suite seguía
@@ -132,6 +136,13 @@ Ha pasado **ocho veces** en este proyecto. Los tests pasaban y la funcionalidad 
    Y el `-40` en Y de `World._place_players` era el parche de cuando el punto de llegada
    era el centro de la sala; al pasar a devolver el suelo, ese parche dejó a los dos
    jugadores flotando. Un margen mágico sobrevive al motivo que lo puso.
+
+9. El propio panel de depuración recién escrito **no compilaba**:
+   `NOTIFICATION_VISIBILITY_CHANGED` es de `CanvasItem`, y un `CanvasLayer` no lo es.
+   El nodo se quedó sin script, la escena se instanció igual y los 209 tests seguían
+   verdes — sólo salió al lanzar host y cliente de verdad. Novena vez, y la primera
+   con un test que la caza: `test_zone_depth.gd` instancia `world.tscn` y exige que
+   cada nodo CONSERVE su script, que es la comprobación que faltaba desde el punto 1.
 
 **Consecuencias prácticas:**
 

@@ -15,6 +15,7 @@ extends GutTest
 const VerdantScene := preload("res://level/zones/zone_verdant.tscn")
 const CinderScene := preload("res://level/zones/zone_cinder.tscn")
 const PlayerScene := preload("res://characters/player/player.tscn")
+const WorldScene := preload("res://systems/world/world.tscn")
 
 ## Las dos zonas se montan SIEMPRE juntas. Cuando algo se configura por datos, un
 ## solo caso no prueba nada: con una única zona, una paleta compartida por error
@@ -198,3 +199,35 @@ func _z_del_andamio(zona: Zone) -> int:
 
 func _luminancia(color: Color) -> float:
 	return 0.2126 * color.r + 0.7152 * color.g + 0.0722 * color.b
+
+
+## --- Que los nodos de la escena CONSERVEN su script ---
+
+func test_todo_lo_que_monta_el_world_conserva_su_script() -> void:
+	# Un error de parseo deja al nodo SIN script y la escena se instancia igual:
+	# es la trampa que este proyecto lleva nueve veces sufriendo, y la novena fue
+	# el propio overlay de depuración —`NOTIFICATION_VISIBILITY_CHANGED` no existe
+	# en un `CanvasLayer`—, que sólo se vio lanzando el juego de verdad.
+	#
+	# Se comprueba sobre `world.tscn` y no sobre cada script suelto porque lo que
+	# rompe es la ESCENA: `load()` de un script roto devuelve null y el `.tscn`
+	# sigue cargando, tan contento.
+	var mundo := WorldScene.instantiate()
+	for ruta: String in ["Hud", "DebugOverlay"]:
+		var nodo := mundo.get_node_or_null(ruta)
+		assert_not_null(nodo, "el World debe montar '%s'" % ruta)
+		assert_not_null(nodo.get_script(),
+				"'%s' se quedó SIN script: no compila y la escena carga igual" % ruta)
+	mundo.free()
+
+
+func test_el_overlay_no_conoce_a_nadie() -> void:
+	# Su valor es no tener punteros a entidades: una zona que se descarga o un
+	# jugador que se va no pueden dejarle nada muerto. Lo que sabe se lo empujan
+	# (`set_zone`) o le llega por el bus.
+	var mundo := WorldScene.instantiate()
+	var overlay := mundo.get_node_or_null("DebugOverlay")
+	assert_not_null(overlay)
+	assert_true(overlay.has_method(&"set_zone"), "la zona se le empuja, no la consulta")
+	assert_eq(overlay.get_child_count(), 1, "sólo su propia interfaz cuelga de él")
+	mundo.free()
