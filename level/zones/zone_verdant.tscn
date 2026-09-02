@@ -11,12 +11,77 @@ script = ExtResource("1")
 zone_id = &"verdant"
 default_spawn_room = &"verdant_1"
 
+; --- Profundidad. Van ANTES de `Rooms` y con `z_as_relative = false`: el
+; --- orden del árbol es la red de seguridad si alguien toca un `z_index`.
+; --- Sin colisión: son `Polygon2D` sueltos, no cuerpos.
+[node name="BackdropFar" type="Parallax2D" parent="."]
+z_index = -100
+z_as_relative = false
+scroll_scale = Vector2(0.35, 0.35)
+repeat_size = Vector2(880, 640)
+repeat_times = 12
+
+[node name="P1" type="Polygon2D" parent="BackdropFar"]
+color = Color(0.09, 0.1, 0.12, 1)
+polygon = PackedVector2Array(0, 0, 110, 0, 110, 640, 0, 640)
+
+[node name="P2" type="Polygon2D" parent="BackdropFar"]
+color = Color(0.09, 0.1, 0.12, 1)
+polygon = PackedVector2Array(340, 0, 430, 0, 430, 640, 340, 640)
+
+[node name="P3" type="Polygon2D" parent="BackdropFar"]
+color = Color(0.09, 0.1, 0.12, 1)
+polygon = PackedVector2Array(0, 280, 430, 280, 430, 330, 0, 330)
+
+[node name="P4" type="Polygon2D" parent="BackdropFar"]
+color = Color(0.09, 0.1, 0.12, 1)
+polygon = PackedVector2Array(600, 120, 780, 120, 780, 400, 600, 400)
+
+
+[node name="BackdropNear" type="Parallax2D" parent="."]
+z_index = -60
+z_as_relative = false
+scroll_scale = Vector2(0.6, 0.6)
+repeat_size = Vector2(620, 520)
+repeat_times = 14
+
+[node name="P1" type="Polygon2D" parent="BackdropNear"]
+color = Color(0.118, 0.132, 0.158, 1)
+polygon = PackedVector2Array(0, 0, 90, 0, 90, 520, 0, 520)
+
+[node name="P2" type="Polygon2D" parent="BackdropNear"]
+color = Color(0.118, 0.132, 0.158, 1)
+polygon = PackedVector2Array(240, 200, 420, 200, 420, 520, 240, 520)
+
+[node name="P3" type="Polygon2D" parent="BackdropNear"]
+color = Color(0.118, 0.132, 0.158, 1)
+polygon = PackedVector2Array(0, 90, 420, 90, 420, 130, 0, 130)
+
+; --- Primer plano: pasa por delante del personaje. Estrecho y espaciado
+; --- a propósito — una silueta ancha encima del jugador tapa el combate.
+[node name="Foreground" type="Parallax2D" parent="."]
+z_index = 100
+z_as_relative = false
+scroll_scale = Vector2(1.25, 1.25)
+repeat_size = Vector2(1500, 0)
+repeat_times = 8
+
+[node name="P1" type="Polygon2D" parent="Foreground"]
+color = Color(0.045, 0.05, 0.062, 0.72)
+polygon = PackedVector2Array(0, -6500, 70, -6500, 70, 6500, 0, 6500)
+
+[node name="P2" type="Polygon2D" parent="Foreground"]
+color = Color(0.045, 0.05, 0.062, 0.72)
+polygon = PackedVector2Array(110, -6500, 142, -6500, 142, 6500, 110, 6500)
+
 [node name="Rooms" type="Node2D" parent="."]
 
 ; --- verdant_1 — entrada, conecta a la derecha ---
 [node name="Room1" type="Node2D" parent="Rooms"]
 
 [node name="Bounds" type="Area2D" parent="Rooms/Room1"]
+z_index = -5
+z_as_relative = false
 collision_layer = 0
 collision_mask = 6
 script = ExtResource("2")
@@ -24,6 +89,8 @@ room_id = &"verdant_1"
 size = Vector2(1280, 1280)
 
 [node name="Scaffold" type="Node2D" parent="Rooms/Room1"]
+z_index = -10
+z_as_relative = false
 script = ExtResource("3")
 size = Vector2(1280, 1280)
 openings = 8
@@ -33,43 +100,53 @@ openings = 8
 position = Vector2(1280, 0)
 
 [node name="Bounds" type="Area2D" parent="Rooms/Room2"]
+z_index = -5
+z_as_relative = false
 collision_layer = 0
 collision_mask = 6
 script = ExtResource("2")
 room_id = &"verdant_2"
 size = Vector2(1280, 1280)
 
+[node name="Scaffold" type="Node2D" parent="Rooms/Room2"]
+z_index = -10
+z_as_relative = false
+script = ExtResource("3")
+size = Vector2(1280, 1280)
+openings = 15
+
+; --- verdant_3 — salida hacia la zona Cinder ---
 [node name="Enemy" parent="Rooms/Room2" instance=ExtResource("5")]
 position = Vector2(320, 600)
 
 [node name="Enemy2" parent="Rooms/Room2" instance=ExtResource("5")]
 position = Vector2(-380, 600)
 
-[node name="Scaffold" type="Node2D" parent="Rooms/Room2"]
-script = ExtResource("3")
-size = Vector2(1280, 1280)
-openings = 15
-
-; --- verdant_3 — salida hacia la zona Cinder ---
 [node name="Room3" type="Node2D" parent="Rooms"]
 position = Vector2(2560, 0)
 
 [node name="Bounds" type="Area2D" parent="Rooms/Room3"]
+z_index = -5
+z_as_relative = false
 collision_layer = 0
 collision_mask = 6
 script = ExtResource("2")
 room_id = &"verdant_3"
 size = Vector2(1280, 1280)
 
-[node name="Enemy" parent="Rooms/Room3" instance=ExtResource("5")]
-position = Vector2(-160, 600)
-
 [node name="Scaffold" type="Node2D" parent="Rooms/Room3"]
+z_index = -10
+z_as_relative = false
 script = ExtResource("3")
 size = Vector2(1280, 1280)
 openings = 4
 
+[node name="Enemy" parent="Rooms/Room3" instance=ExtResource("5")]
+position = Vector2(-160, 600)
+
 [node name="DoorToCinder" type="Area2D" parent="Rooms/Room3"]
+z_index = -5
+z_as_relative = false
 position = Vector2(544, 528)
 collision_layer = 0
 collision_mask = 2
@@ -84,6 +161,8 @@ required_players = 2
 position = Vector2(1280, -1280)
 
 [node name="Bounds" type="Area2D" parent="Rooms/Room4"]
+z_index = -5
+z_as_relative = false
 collision_layer = 0
 collision_mask = 6
 script = ExtResource("2")
@@ -91,6 +170,8 @@ room_id = &"verdant_4"
 size = Vector2(1280, 1280)
 
 [node name="Scaffold" type="Node2D" parent="Rooms/Room4"]
+z_index = -10
+z_as_relative = false
 script = ExtResource("3")
 size = Vector2(1280, 1280)
 openings = 2
@@ -100,6 +181,8 @@ openings = 2
 position = Vector2(1280, 1280)
 
 [node name="Bounds" type="Area2D" parent="Rooms/Room5"]
+z_index = -5
+z_as_relative = false
 collision_layer = 0
 collision_mask = 6
 script = ExtResource("2")
@@ -107,6 +190,8 @@ room_id = &"verdant_5"
 size = Vector2(1280, 1280)
 
 [node name="Scaffold" type="Node2D" parent="Rooms/Room5"]
+z_index = -10
+z_as_relative = false
 script = ExtResource("3")
 size = Vector2(1280, 1280)
 openings = 1

@@ -32,6 +32,9 @@ godot --path . --scene res://systems/world/world.tscn \
 godot --path . --write-movie /tmp/h/f.png --fixed-fps 30 --quit-after 300 -- --host &
 sleep 3
 godot --path . --write-movie /tmp/c/f.png --fixed-fps 30 --quit-after 300 -- --join 127.0.0.1 &
+
+# Ver las formas de colisión mientras corre: lo da el motor, no hace falta código
+godot --path . --debug-collisions --scene res://systems/world/world.tscn
 ```
 
 **Para capturar hace falta ventana.** En `--headless` la captura del viewport da
@@ -80,7 +83,7 @@ registrada o si alguien pasa de 400 líneas (§6).
 
 ## Trampa recurrente: verde no significa funcionando
 
-Ha pasado **siete veces** en este proyecto. Los tests pasaban y la funcionalidad no existía:
+Ha pasado **ocho veces** en este proyecto. Los tests pasaban y la funcionalidad no existía:
 
 1. `room_scaffold.gd` no compilaba. Un error de parseo deja al nodo **sin script** sin
    romper la instanciación de la escena: las salas quedaban sin suelo y la suite seguía
@@ -118,6 +121,17 @@ Ha pasado **siete veces** en este proyecto. Los tests pasaban y la funcionalidad
    incluida la de la garra, que hoy nadie escribe desde el arquetipo: el día que el
    alcance del golpe salga del dato —`attacks` ya está ahí— el fallo vuelve idéntico, y
    con la documentación diciendo que estaba resuelto.
+8. `Camera2D.offset` **se salta los `limit_*`**. `player_camera.gd` metía ahí su
+   `look_ahead_y` de -48 px, así que con la cámara topada contra el suelo de la sala la
+   vista se iba 48 px por debajo del límite: quien estaba de pie en el suelo lo veía
+   FUERA DE CUADRO, y él mismo asomaba por el borde inferior. Estaba anotado como "el
+   host encuadra peor que el cliente" y parecía cosa de la red; no lo era — la asimetría
+   venía de que los dos jugadores aparecían a alturas distintas. El arreglo es mover el
+   desplazamiento a `position`, que sí cuelga del personaje y sí respeta los límites.
+   La suite daba 187/187 porque **ningún test mira lo que se ve**: sólo la colisión.
+   Y el `-40` en Y de `World._place_players` era el parche de cuando el punto de llegada
+   era el centro de la sala; al pasar a devolver el suelo, ese parche dejó a los dos
+   jugadores flotando. Un margen mágico sobrevive al motivo que lo puso.
 
 **Consecuencias prácticas:**
 
@@ -253,11 +267,12 @@ Por orden de lo que más desbloquea:
    habilidades no hay esquema que inventar.
 4. **Mapa.**
 5. **Tileset y arte.** Todo son `Polygon2D`. `RoomScaffold` es geometría provisional y
-   está marcado para retirarse cuando haya `TileMapLayer` con terrain sets. Mientras
-   tanto el nivel **no se lee**: un único color plano para suelo, pared y plataforma,
-   sin `clear_color`, y las dos zonas idénticas. Y las plataformas miden 40x24 px contra
-   un cuerpo de 28x44, así que no se puede caminar sobre ellas — las dos cosas, con lo
-   ya medido y cómo hacerlas, en `ARCHITECTURE-MAP.md` → *Deferred*.
+   está marcado para retirarse cuando haya `TileMapLayer` con terrain sets. La
+   **legibilidad ya no espera a eso**: el graybox tiene `default_clear_color` propio,
+   cuatro colores por rol en el andamio —la losa de un solo sentido se distingue del
+   suelo macizo—, dos capas de fondo y una de primer plano con `Parallax2D`, el
+   `room_id` escrito en las cuatro esquinas de cada sala y las dos zonas separadas por
+   temperatura. Lo que falta es arte de verdad, no que se entienda el nivel.
 6. **Audio.** Nada.
 
 También pendientes, anotados con su disparador en `ARCHITECTURE-MAP.md` → *Deferred*:

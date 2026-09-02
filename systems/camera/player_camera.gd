@@ -66,7 +66,14 @@ func _physics_process(delta: float) -> void:
 		target_x = signf(speed_x) * look_ahead_x
 	_look_offset_x = move_toward(_look_offset_x, target_x, look_ahead_speed * look_ahead_x * delta)
 
-	offset = Vector2(_look_offset_x, look_ahead_y)
+	# `position` y no `offset`: los `limit_*` restringen dónde puede estar la
+	# cámara, pero `offset` se suma DESPUÉS y se los salta. Con `look_ahead_y` a
+	# -48 y la cámara topada contra el suelo de la sala, la vista se iba 48 px por
+	# encima del límite y el personaje quedaba asomando por el borde inferior con
+	# el suelo fuera de cuadro — que es justo lo que se había anotado como «el
+	# host encuadra peor que el cliente». Moviendo la propia cámara, que cuelga
+	# del personaje, el desplazamiento entra dentro de los límites.
+	position = Vector2(_look_offset_x, look_ahead_y)
 
 
 ## Encierra la cámara dentro del rectángulo de una sala. Lo llamará el sistema

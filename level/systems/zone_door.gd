@@ -45,6 +45,14 @@ signal waiting_changed(present: int, required: int)
 
 @export var editor_color: Color = Color(0.98, 0.72, 0.26, 0.28)
 
+## Marca de andamio: en partida se dibuja el marco de la puerta. Provisional,
+## igual que `RoomScaffold`. Sin esto la salida es INVISIBLE mientras se juega:
+## el HUD dice por qué una puerta no se abre, pero no dónde está.
+@export var draw_placeholder: bool = true:
+	set(value):
+		draw_placeholder = value
+		queue_redraw()
+
 var _shape: CollisionShape2D
 ## Viajeros que han SALIDO del área desde la última llegada por esta puerta.
 ## Solo ellos pueden pedir viaje mientras `_received_arrival` esté puesto: ver
@@ -124,11 +132,16 @@ func _rebuild() -> void:
 
 
 func _draw() -> void:
-	if not Engine.is_editor_hint():
-		return
 	var local := Rect2(-size * 0.5, size)
-	draw_rect(local, editor_color, true)
-	draw_rect(local, Color(editor_color, 0.9), false, 3.0)
+	if Engine.is_editor_hint():
+		draw_rect(local, editor_color, true)
+		draw_rect(local, Color(editor_color, 0.9), false, 3.0)
+		return
+	if not draw_placeholder:
+		return
+	# Solo el marco: un relleno translúcido sobre el vano tapa a quien lo cruza,
+	# y por aquí pasan los dos jugadores juntos.
+	draw_rect(local, Color(editor_color, 0.85), false, 4.0)
 
 
 func _get_configuration_warnings() -> PackedStringArray:

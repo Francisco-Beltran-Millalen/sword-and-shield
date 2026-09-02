@@ -141,7 +141,11 @@ func _place_players(at: Vector2) -> void:
 		if not child.is_multiplayer_authority():
 			offset += 80.0
 			continue
-		child.place_at(at + Vector2(offset, -40.0))
+		# Solo el reparto lateral. El desplazamiento de -40 px en Y que había aquí
+		# era el parche de cuando el punto de llegada era el CENTRO de la sala: ahora
+		# `RoomBounds.spawn_point()` devuelve la cara que se pisa, y levantar 40 px
+		# sobre ella deja a los dos jugadores flotando — medido grabando.
+		child.place_at(at + Vector2(offset, 0.0))
 		offset += 80.0
 
 

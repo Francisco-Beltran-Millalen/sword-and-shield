@@ -65,18 +65,20 @@ func door(door_id: StringName) -> ZoneDoor:
 
 
 ## Dónde dejar a los jugadores al entrar. Si `from_door` nombra una puerta de
-## esta zona, se aparece en ella; si no, en el centro de la sala por defecto.
+## esta zona, se aparece en ella; si no, sobre el SUELO de la sala por defecto.
 func arrival_point(from_door: StringName = &"") -> Vector2:
 	if from_door != &"":
 		var entry := door(from_door)
 		if entry != null:
 			return entry.arrival_point()
+	# `spawn_point()` y no `global_position`: el centro de la sala está 624 px por
+	# encima del suelo, y aparecer ahí abría cada partida con seis metros de caída.
 	var spawn_room := room(default_spawn_room)
 	if spawn_room != null:
-		return spawn_room.global_position
+		return spawn_room.spawn_point()
 	var all := rooms()
 	if not all.is_empty():
-		return all[0].global_position
+		return all[0].spawn_point()
 	return global_position
 
 

@@ -75,7 +75,35 @@ const PLATFORM_MARGIN: float = OPENING_WIDTH * 0.5
 		platform_rise = value
 		_rebuild()
 
-@export var solid_color: Color = Color(0.17, 0.21, 0.26, 1.0)
+## Paleta del andamio. Cuatro colores y no uno porque el graybox tiene que
+## comunicar sus REGLAS, y la más importante de la sala —esto se atraviesa, esto
+## no— era invisible: `one_way` viaja a la forma de colisión y no al dibujo, así
+## que una losa que se cruza se pintaba igual que un suelo macizo.
+##
+## Van con setter y aquí, no repartidos desde `Zone._ready`: para entonces los
+## `Polygon2D` ya están creados y el color llegaría tarde.
+@export_group("Paleta")
+## Donde se pisa: el más claro, porque es la superficie que se busca.
+@export var floor_color: Color = Color(0.28, 0.32, 0.38, 1.0):
+	set(value):
+		floor_color = value
+		_rebuild()
+@export var wall_color: Color = Color(0.20, 0.23, 0.28, 1.0):
+	set(value):
+		wall_color = value
+		_rebuild()
+## El techo es el suelo de la sala de encima: se hunde para no competir con él.
+@export var ceiling_color: Color = Color(0.14, 0.16, 0.20, 1.0):
+	set(value):
+		ceiling_color = value
+		_rebuild()
+## Las losas de un solo sentido. El color más separado de los otros tres: es la
+## única pieza de la sala que se ATRAVIESA.
+@export var platform_color: Color = Color(0.45, 0.49, 0.56, 1.0):
+	set(value):
+		platform_color = value
+		_rebuild()
+@export_group("")
 
 
 func _ready() -> void:
@@ -101,17 +129,20 @@ func _rebuild() -> void:
 
 	var half := size * 0.5
 	# Paredes: cada lado se parte si tiene abertura.
-	_build_side(Side.TOP, Vector2(0.0, -half.y), Vector2(size.x, WALL_THICKNESS), true)
-	_build_side(Side.BOTTOM, Vector2(0.0, half.y), Vector2(size.x, WALL_THICKNESS), true)
-	_build_side(Side.LEFT, Vector2(-half.x, 0.0), Vector2(WALL_THICKNESS, size.y), false)
-	_build_side(Side.RIGHT, Vector2(half.x, 0.0), Vector2(WALL_THICKNESS, size.y), false)
+	var tapa := Vector2(size.x, WALL_THICKNESS)
+	var costado := Vector2(WALL_THICKNESS, size.y)
+	_build_side(Side.TOP, Vector2(0.0, -half.y), tapa, true, ceiling_color)
+	_build_side(Side.BOTTOM, Vector2(0.0, half.y), tapa, true, floor_color)
+	_build_side(Side.LEFT, Vector2(-half.x, 0.0), costado, false, wall_color)
+	_build_side(Side.RIGHT, Vector2(half.x, 0.0), costado, false, wall_color)
 	_build_platforms()
 	update_configuration_warnings()
 
 
-func _build_side(side: int, center: Vector2, full_size: Vector2, horizontal: bool) -> void:
+func _build_side(side: int, center: Vector2, full_size: Vector2, horizontal: bool,
+		color: Color) -> void:
 	if openings & side == 0:
-		_add_solid(center, full_size)
+		_add_solid(center, full_size, false, color)
 		return
 
 	if horizontal:
@@ -121,7 +152,7 @@ func _build_side(side: int, center: Vector2, full_size: Vector2, horizontal: boo
 			return
 		for direction: float in [-1.0, 1.0]:
 			var offset := (OPENING_WIDTH * 0.5 + segment * 0.5) * direction
-			_add_solid(center + Vector2(offset, 0.0), Vector2(segment, full_size.y))
+			_add_solid(center + Vector2(offset, 0.0), Vector2(segment, full_size.y), false, color)
 		return
 
 	# Pared lateral: el hueco se apoya en el suelo, así que solo queda el tramo
@@ -130,7 +161,8 @@ func _build_side(side: int, center: Vector2, full_size: Vector2, horizontal: boo
 	var height := gap_top + size.y * 0.5
 	if height <= 0.0:
 		return
-	_add_solid(Vector2(center.x, (gap_top - size.y * 0.5) * 0.5), Vector2(full_size.x, height))
+	_add_solid(Vector2(center.x, (gap_top - size.y * 0.5) * 0.5), Vector2(full_size.x, height),
+			false, color)
 
 
 ## Escalera hasta el techo, a la derecha de la columna del hueco de paso, con
@@ -180,7 +212,7 @@ func _build_platforms() -> void:
 		# `_add_solid` centra el cuerpo; lo que importa es dónde queda la cara
 		# que se pisa, que es la que separa una fila de la siguiente.
 		_add_solid(Vector2(x, y + PLATFORM_THICKNESS * 0.5),
-				Vector2(ancho, PLATFORM_THICKNESS), true)
+				Vector2(ancho, PLATFORM_THICKNESS), true, platform_color)
 
 
 ## Peldaños necesarios para subir del suelo al techo sin pasarse de
@@ -195,7 +227,7 @@ func _step_count() -> int:
 ## No se toca `one_way_collision_margin`: con el valor por defecto (1.0) el
 ## jugador no se cuela ni cayendo a 3.710 px/s —medido—, y poniéndolo a 0 sí se
 ## cuela y acaba en el suelo.
-func _add_solid(at: Vector2, extent: Vector2, one_way: bool = false) -> void:
+func _add_solid(at: Vector2, extent: Vector2, one_way: bool, color: Color) -> void:
 	var body := StaticBody2D.new()
 	body.position = at
 	body.collision_layer = 1   ## capa `world`
@@ -215,7 +247,7 @@ func _add_solid(at: Vector2, extent: Vector2, one_way: bool = false) -> void:
 		Vector2(-half.x, -half.y), Vector2(half.x, -half.y),
 		Vector2(half.x, half.y), Vector2(-half.x, half.y),
 	])
-	visual.color = solid_color
+	visual.color = color
 	body.add_child(visual)
 
 

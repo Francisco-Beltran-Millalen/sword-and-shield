@@ -124,6 +124,32 @@ func test_entrar_en_una_sala_reencuadra_la_camara_del_jugador() -> void:
 	assert_eq(player.camera.limit_right, int(room.world_rect().end.x))
 
 
+## --- Dónde se empieza ---
+
+func test_se_aparece_sobre_el_suelo_y_no_en_el_aire() -> void:
+	# `arrival_point()` sin puerta devolvía el centro GEOMÉTRICO de la sala, que
+	# está 624 px por encima del piso: cada partida abría con seis metros de
+	# caída, y cada prueba manual empezaba esperando a aterrizar. Medido grabando
+	# el juego — a los 0,5 s el jugador todavía no había tocado nada.
+	var sala := zone.room(&"verdant_1")
+	assert_not_null(sala)
+	var andamio := _scaffold_de(&"verdant_1")
+	assert_not_null(andamio)
+
+	var suelo := andamio.global_position.y + andamio.floor_surface_y()
+	assert_almost_eq(zone.arrival_point().y, suelo, 1.0,
+			"se aparece sobre la cara que se pisa, no en el centro de la sala")
+	assert_almost_eq(zone.arrival_point().x, sala.global_position.x, 1.0,
+			"y centrado en X, que es donde la columna del hueco queda libre")
+
+
+func test_el_punto_de_aparicion_cae_dentro_de_su_sala() -> void:
+	# La red por si alguien mueve el andamio: un punto de aparición fuera del
+	# rectángulo de la sala deja a los dos jugadores en otra parte del mundo.
+	assert_true(zone.room(&"verdant_1").world_rect().has_point(zone.arrival_point()),
+			"el punto de aparición tiene que caer dentro de verdant_1")
+
+
 ## --- Geometría del scaffold ---
 ##
 ## Estos tests existen por un fallo real: `room_scaffold.gd` no compilaba y la
