@@ -19,7 +19,7 @@ extends Node
 
 ## Sin `class_name`: una clase global obliga a reimportar antes de que compile
 ## quien la usa, y un script que no compila deja al nodo SIN script sin romper la
-## escena (trampa nº1 de `CLAUDE.md`). Se precarga por ruta, como `ComponentLookup`.
+## escena (trampa nº1 de `AGENTS.md`). Se precarga por ruta, como `ComponentLookup`.
 const ComponentLookup := preload("res://components/component_lookup.gd")
 
 ## Estado → nombre del nodo en el `AnimationNodeStateMachine`. Las claves son los
@@ -53,7 +53,7 @@ func _ready() -> void:
 	if pose_signal != &"" and root.has_signal(pose_signal):
 		root.connect(pose_signal, _on_pose_changed)
 	# `init_state` no emite nada, así que nadie anunciará la pose de arranque:
-	# quien se suscribe tarde no ve el primer valor (`CLAUDE.md`). Se pide aquí.
+	# quien se suscribe tarde no ve el primer valor (`AGENTS.md`). Se pide aquí.
 	# Diferida porque el `_ready` de este nodo puede correr antes que el del
 	# `AnimationTree`, que es nieto del anfitrión y no hermano de este.
 	_aplicar.call_deferred(_machine.current_state, false)

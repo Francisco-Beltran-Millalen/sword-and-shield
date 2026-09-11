@@ -16,7 +16,7 @@ extends StatModifierNode
 ##
 ## No guarda copia de lo desbloqueado (§4): lo consulta al recalcular. Por eso una
 ## entidad que entra en el árbol DESPUÉS del desbloqueo no se pierde nada, que es
-## la trampa del suscriptor tardío escrita en `CLAUDE.md`. El evento solo sirve
+## la trampa del suscriptor tardío escrita en `AGENTS.md`. El evento solo sirve
 ## para invalidar la caché, no para enterarse.
 
 func _ready() -> void:

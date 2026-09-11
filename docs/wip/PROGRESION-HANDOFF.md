@@ -6,7 +6,7 @@ Baseline antes de empezar: 20 scripts, 214 tests, 214 pasando (`caa844c`).
 Se paró por límite de contexto, no por un problema técnico. Lo que hay en este commit
 son tres scripts nuevos que **todavía no compilan solos**: `ability_loadout.gd` nombra
 `WorldProgress`, que aún no existe como autoload. Eso deja el nodo SIN script y la suite
-en verde igual — la trampa nº1 de `CLAUDE.md`. No dar nada por bueno hasta terminar la
+en verde igual — la trampa nº1 de `AGENTS.md`. No dar nada por bueno hasta terminar la
 lista de abajo y volver a medir.
 
 ## Qué se decidió y por qué (no re-litigar)
@@ -44,7 +44,7 @@ el triaje de cada una está escrito ahí. Lo esencial:
    `StatsComponent.StatID`: ese tipo crea una referencia cíclica entre class_names.
    Documentar que nadie muta un `StatModifierData` (solo se leen los tres campos en
    `stats_component.gd:113-121`), así que compartir el recurso entre las dos instancias
-   de jugador no reabre el fallo nº7 de `CLAUDE.md`.
+   de jugador no reabre el fallo nº7 de `AGENTS.md`.
 2. `autoloads/world_progress.gd` — autoload SIN `class_name`. Estado
    `# ephemeral` `_unlocked: Array[StringName]`. `has(id)`, `granted() -> Array[AbilityData]`,
    `unlocked_ids()`, `clear()`, `request_unlock(id)` (si `not multiplayer.is_server()`,

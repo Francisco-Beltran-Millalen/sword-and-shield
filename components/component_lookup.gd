@@ -6,7 +6,7 @@ extends RefCounted
 ## estática, y registrar una clase global obliga a reimportar antes de que los
 ## scripts que la usan vuelvan a compilar. Un script que no compila deja al nodo
 ## SIN script sin romper la instanciación de la escena, y la suite sigue en
-## verde — la trampa nº1 de `CLAUDE.md`. Los consumidores lo precargan por ruta:
+## verde — la trampa nº1 de `AGENTS.md`. Los consumidores lo precargan por ruta:
 ##
 ##     const ComponentLookup := preload("res://components/component_lookup.gd")
 ##

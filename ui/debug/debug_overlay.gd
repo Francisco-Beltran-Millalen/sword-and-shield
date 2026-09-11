@@ -22,7 +22,7 @@ extends CanvasLayer
 ## lo monta, que es lo que se quiere de una herramienta.
 
 ## Arrancar visible. `--write-movie` no tiene teclado —es la forma de mirar el
-## juego que documenta CLAUDE.md—, así que un overlay que sólo se enciende con
+## juego que documenta AGENTS.md—, así que un overlay que sólo se enciende con
 ## F3 no sale en una sola grabación, que es justo cuando hace falta.
 @export var visible_al_arrancar: bool = false
 

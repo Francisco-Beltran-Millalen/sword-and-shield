@@ -39,7 +39,7 @@ jugadores.
      `ComponentLookup.find(get_parent(), "StatsComponent", "StatsComponent")`.
    - En `_ready`: aplica TODO lo que ya está desbloqueado en `WorldProgress` y luego se
      suscribe a `GameEvents.ability_unlocked`.
-     Las dos cosas, y en ese orden, por la trampa documentada en CLAUDE.md ("quien se
+     Las dos cosas, y en ese orden, por la trampa documentada en AGENTS.md ("quien se
      suscribe tarde no ve el primer valor"): un jugador que aparece DESPUÉS del
      desbloqueo —el segundo peer al conectar, o un revivido— no oiría el evento pasado.
    - `grant(id)`: si ya está colgada, no hace nada (idempotente); si no, instancia un
@@ -89,7 +89,7 @@ jugadores.
    y habría que duplicar la clase en una versión Resource. Nadie muta un
    `StatModifierData` —`StatsComponent._recalculate` solo lee `stat_id`, `add_value` y
    `mult_value`—, así que compartir el recurso entre las dos instancias de jugador no
-   reabre el fallo nº7 de CLAUDE.md (sub-recursos compartidos que se ESCRIBEN). Se
+   reabre el fallo nº7 de AGENTS.md (sub-recursos compartidos que se ESCRIBEN). Se
    documenta en el archivo.
 
 8. `level/systems/zone_door.gd` (187 líneas hoy) — `@export var required_ability: AbilityData`
@@ -145,7 +145,7 @@ jugadores.
     - Se MIDE la altura de salto antes y después del desbloqueo conduciendo a un jugador
       real con `ScriptedIntentSource` (el patrón de `test_room_traversal.gd`), y se
       exige que suba. No se comprueba "el stat vale 1".
-    - DOS jugadores: ambos reciben la habilidad. (CLAUDE.md: "un fallo que solo aparece
+    - DOS jugadores: ambos reciben la habilidad. (AGENTS.md: "un fallo que solo aparece
       con dos, no aparece con uno".)
     - Un jugador que entra al árbol DESPUÉS del desbloqueo también la tiene — es el
       caso del suscriptor tardío.
@@ -160,7 +160,7 @@ jugadores.
   "All tests passed" (GUT omite en silencio los scripts que no compilan).
 - `godot --headless --import --path .` tras crear las clases nuevas: un `class_name` que
   no está en el caché de clases globales deja SIN script a quien lo use, la escena se
-  instancia igual y la suite sigue verde (trampa nº1 y nº9 de CLAUDE.md).
+  instancia igual y la suite sigue verde (trampa nº1 y nº9 de AGENTS.md).
 - Partida REAL de host + cliente con `--write-movie`, contando los PNG escritos, con el
   panel F3 encendido: pisar el pedestal en un peer y comprobar que el OTRO también salta
   dos veces, y que la puerta se abre para los dos.

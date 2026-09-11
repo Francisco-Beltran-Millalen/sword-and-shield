@@ -2,7 +2,7 @@ extends GutTest
 
 ## El cuerpo del jugador se mueve de verdad.
 ##
-## Escrito contra las trampas nº1, nº2 y nº9 de `CLAUDE.md` a la vez: que la
+## Escrito contra las trampas nº1, nº2 y nº9 de `AGENTS.md` a la vez: que la
 ## escena instancie no prueba que los nodos conserven su script, y que exista un
 ## `AnimationPlayer` no prueba que sus pistas muevan algo — el combate ya se pasó
 ## un tiempo sin daño porque las animaciones estaban vacías y los tests de la
