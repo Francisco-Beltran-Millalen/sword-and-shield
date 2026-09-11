@@ -22,11 +22,21 @@ extends Node2D
 signal impulse_requested(impulse: Vector2)
 ## El kit entró o salió de una acción que bloquea el control normal.
 signal busy_changed(busy: bool)
+## Qué debería estar haciendo el CUERPO de quien empuña. Vacío = que mande el
+## estado. Está aquí, junto a `is_busy()` y `speed_scale()`, porque el contrato
+## del kit se lee entero en un solo archivo.
+##
+## Existe porque el estado no basta: `Player.State.KIT_ACTION` es uno solo para
+## atacar y para guardar, y el combo son tres golpes bajo él. El kit es el único
+## que sabe cuál de las dos cosas está pasando, y lo dice hacia arriba (§1) sin
+## conocer a quien anima.
+signal pose_changed(pose: StringName)
 
 @export var kit_id: StringName = &"base"
 @export var display_name: String = "Base"
 
 var _busy: bool = false
+var _pose: StringName = &""
 
 
 ## ¿El kit está en medio de una acción que se adueña del control?
@@ -47,6 +57,7 @@ func on_action_pressed(_player: Node, _intent: PlayerIntent) -> void:
 ## El jugador recibió daño; el kit cancela lo que estuviera haciendo.
 func on_interrupted(_player: Node) -> void:
 	_set_busy(false)
+	_set_pose(&"")
 
 
 ## Multiplicador de velocidad que impone el kit (guardia alta, arma pesada).
@@ -61,3 +72,13 @@ func _set_busy(value: bool) -> void:
 		return
 	_busy = value
 	busy_changed.emit(_busy)
+
+
+## Anuncia la pose del cuerpo. A diferencia de `_set_busy`, repetir la MISMA
+## pose sí emite: el segundo golpe de un combo no cambia de estado ni de pose, y
+## quien anima necesita el aviso para rearrancar el gesto.
+func _set_pose(value: StringName) -> void:
+	if value == &"" and _pose == &"":
+		return
+	_pose = value
+	pose_changed.emit(_pose)

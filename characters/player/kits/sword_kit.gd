@@ -47,10 +47,15 @@ func _resolve_facing(player: Node, intent: PlayerIntent) -> int:
 
 func _on_attack_started(_data: AttackData, _index: int) -> void:
 	_set_busy(true)
+	# Por golpe, no por combo: los tres encadenados comparten estado y `_busy`,
+	# así que este es el único aviso que distingue la segunda estocada de la
+	# primera para quien anima el cuerpo.
+	_set_pose(&"attack")
 
 
 func _on_chain_ended() -> void:
 	_set_busy(false)
+	_set_pose(&"")
 
 
 func _on_lunge_requested(impulse: Vector2) -> void:

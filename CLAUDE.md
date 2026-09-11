@@ -54,7 +54,15 @@ delante**: toma la ventana ACTIVA, así que con la pantalla bloqueada devuelve l
 pantalla de bloqueo con exit 0 y sin un aviso — el fallo es indistinguible del acierto.
 
 Lo que ninguna de las dos hace es **pilotar**: para conducir a alguien por la sala se
-sustituye su `IntentSource` por uno guionizado, que es lo que ya hacen los tests.
+sustituye su `IntentSource` por uno guionizado, que es lo que ya hacen los tests. Eso
+ya está montado para revisar animaciones — los dos jugadores recorren idle, andar,
+salto, caída, combo y guardia sin tocar el teclado:
+
+```bash
+godot --path . --scene res://tools/visual_bench/visual_bench.tscn \
+      --write-movie /tmp/b/f.png --fixed-fps 30 --quit-after 270
+magick /tmp/b/f0000008{4,7}.png /tmp/b/f000000{90,93,96,99}.png +append /tmp/tira.png
+```
 
 ---
 
@@ -144,6 +152,20 @@ Ha pasado **nueve veces** en este proyecto. Los tests pasaban y la funcionalidad
    con un test que la caza: `test_zone_depth.gd` instancia `world.tscn` y exige que
    cada nodo CONSERVE su script, que es la comprobación que faltaba desde el punto 1.
 
+10. El muñeco articulado recién puesto **caminaba de espaldas**: avanzaba hacia
+   la derecha moviendo las piernas hacia atrás, con el pie de apoyo patinando
+   hacia adelante. Un `Bone2D` apunta hacia **+Y**, así que rotarlo en positivo
+   lleva la punta hacia **-X** — adelante es NEGATIVO, al revés de lo que dice
+   la intuición. Los quince tests del cuerpo estaban en verde: había rodillas,
+   codos, balanceo de cadera y rebote, y todos medían que las cosas SE MUEVEN,
+   ninguno hacia dónde. Lo vio el dueño mirando una tira de fotogramas. El test
+   que lo caza mide que el pie apoyado RETROCEDE respecto al cuerpo, que es lo
+   único que distingue andar de andar hacia atrás. Con él salieron dos fallos
+   más de la misma familia: los pies se hundían 1,3 px porque la ESQUINA de un
+   rectángulo rotado baja más que el rectángulo recto (se arregla con extremos
+   en cápsula, no con código), y el pie trasero patinaba 0,4 px porque el muslo
+   se adelantaba antes de que la rodilla lo levantara.
+
 **Consecuencias prácticas:**
 
 - **GUT omite en silencio los scripts que no compilan** y aun así imprime *"All tests
@@ -172,6 +194,10 @@ Ha pasado **nueve veces** en este proyecto. Los tests pasaban y la funcionalidad
   y el reparto de reaparición son la misma figura: con una sola instancia el código está
   bien. Cuando algo se configura por datos, el test que sirve monta **dos** con datos
   distintos.
+- **Una tira de fotogramas ve lo que ningún assert.** Un ciclo invertido, un pie
+  hundido o un arma despegada de la mano pasan cualquier suite y saltan a la
+  vista en seis fotogramas puestos en fila. `tools/visual_bench/` conduce a los
+  dos jugadores por todas las poses para eso; luego, `magick f1.png … +append`.
 - **Ejecuta el juego de verdad** antes de dar algo por terminado. Los tres primeros
   fallos aparecieron al lanzar host y cliente, no en la suite. El cuarto ni siquiera:
   arrancaba limpio en ambos extremos y solo salió al medir la geometría contra el
@@ -214,8 +240,11 @@ no lo coloca `_place_players`.
 components/          Reutilizables, sin conocer a su dueño
   combat/            AttackData (Resource) · Attacker · DamageReceiver
   hitbox · hurtbox · guard_box · health_component · stats_component · state_machine
+  state_animator (AnimationPlayer) · state_animation_tree (AnimationTree, con arte)
   component_lookup   Cómo una entidad encuentra sus piezas (sin `class_name`)
 characters/player/   Player (orquestador delgado) · Locomotion · IntentSource
+  player.tscn        Cuerpo = Skeleton2D de 11 Bone2D con primitivas rígidas (cut-out)
+  player_animations  8 poses · player_pose_machine: el grafo que las cruza
   kits/              PlayerKit (Nodo) → SwordKit · ShieldKit
     attacks/         Un .tres (AttackData) por golpe
 characters/enemy/    Enemy · EnemyArchetype (Resource) · AIIntentSource · Perception
@@ -226,6 +255,7 @@ level/zones/         zone_verdant · zone_cinder (5 salas cuadradas cada una)
 systems/             world/ · network/ (lobby) · camera/
 ui/hud/              Hud — capa de solo lectura; el World le empuja, no pregunta
 autoloads/           NetworkManager · GameEvents · SessionState (los tres, sin `class_name`)
+tools/visual_bench/  Banco visual: pilota a los dos por todas las poses. No es un test
 ```
 
 **Patrones a imitar** (los mejores del repo): `stats_component.gd` descubre sus
@@ -266,6 +296,12 @@ están escritas en el propio archivo.
 
 Por orden de lo que más desbloquea:
 
+0. **Animación — el cuerpo ya está; el enemigo no.** Los dos jugadores son muñecos
+   articulados con `AnimationTree`, y el `StateAnimationTree` que los conduce no sabe
+   nada de ellos: montar el mismo esqueleto bajo `Visuals` del enemigo y colgarle el
+   nodo es todo lo que hace falta. Sigue pendiente que el kit cuelgue de la mano
+   (`ARCHITECTURE-MAP.md` → *Deferred*), que es lo que hoy obliga a animar poco el
+   brazo del arma.
 1. **HUD — esqueleto puesto, contenido no.** `Hud` ya muestra la salud de los dos
    jugadores y por qué una puerta no se abre. Faltan el estado del kit (guardia, combo),
    las habilidades desbloqueadas, la pantalla de derrota y cualquier arte: todo son

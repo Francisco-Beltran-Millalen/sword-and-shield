@@ -15,6 +15,10 @@ extends CharacterBody2D
 signal state_changed(new_state: State)
 signal health_changed(current: int, maximum: int)
 signal facing_changed(facing: int)
+## Reenvía la pose que pide el kit. Quien anima el cuerpo escucha aquí y no al
+## kit: el kit se instala en runtime y se reemplaza, así que suscribirse a él
+## directamente obligaría a reconectar a cada cambio de equipo.
+signal pose_changed(pose: StringName)
 signal room_changed(room_id: StringName)
 
 enum State {
@@ -264,6 +268,10 @@ func equip_kit(kit_scene: PackedScene) -> void:
 	# tampoco abra el agujero.
 	instance.set_multiplayer_authority(get_multiplayer_authority())
 	_bind_kit()
+	# El kit nuevo entra sin pose. Sin este aviso el cuerpo se quedaría con la
+	# del kit retirado —guardia alta sin escudo— hasta el siguiente cambio de
+	# estado.
+	pose_changed.emit(&"")
 
 
 func _bind_kit() -> void:
@@ -272,6 +280,8 @@ func _bind_kit() -> void:
 		return
 	if not kit.impulse_requested.is_connected(apply_impulse):
 		kit.impulse_requested.connect(apply_impulse)
+	if not kit.pose_changed.is_connected(pose_changed.emit):
+		kit.pose_changed.connect(pose_changed.emit)
 
 
 func _update_facing(intent: PlayerIntent) -> void:

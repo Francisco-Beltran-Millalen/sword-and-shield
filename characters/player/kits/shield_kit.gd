@@ -56,6 +56,7 @@ func speed_scale() -> float:
 func _raise(player: Node, intent: PlayerIntent) -> void:
 	_guarding = true
 	_set_busy(true)
+	_set_pose(&"guard")
 	var facing := _resolve_facing(player, intent)
 	if guard_box != null:
 		guard_box.raise(facing)
@@ -66,6 +67,7 @@ func _lower() -> void:
 		return
 	_guarding = false
 	_set_busy(false)
+	_set_pose(&"")
 	if guard_box != null:
 		guard_box.lower()
 
