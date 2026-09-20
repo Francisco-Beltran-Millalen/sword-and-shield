@@ -86,8 +86,21 @@ godot --headless --path . -s tools/anim_gen/gen_player_anims.gd
 **Reconstruirlo desde el `.tres`, no desde cero:** las poses actuales están afinadas
 contra mediciones (alturas de pierna cuadradas al milímetro, clave de despegue a 0,05 s).
 Leer los valores del `.tres` existente y volcarlos al generador; luego regenerar y **exigir
-que el `.tres` salga byte a byte igual** antes de tocar nada. Si no sale igual, el
-generador aún no reproduce lo que hay.
+que el `.tres` regenerado sea idéntico en contenido al actual**, comparando el recurso
+cargado y no los bytes: los sub-recursos llevan ids que `ResourceSaver` genera al guardar
+(`Animation_jafpu`, `AnimationNodeAnimation_fgkm7`, …) y saldrán distintos en cada guardado
+aunque el contenido sea el mismo, así que "byte a byte" es un criterio que ningún
+generador puede cumplir. La comparación es, por animación, `length`, `loop_mode` y cada
+pista (path, interp, times, values); y por la máquina, estados y aristas (56). Si no sale
+igual, el generador aún no reproduce lo que hay.
+
+Medido el 20 sep 2026, porque la diferencia importa: cargar el `.tres` y volver a
+guardarlo SÍ da bytes idénticos —los ids vienen del archivo y se reutilizan—, pero
+construir el mismo recurso dos veces desde cero da `Animation_umtyf` y `Animation_mv3l7`.
+Es decir: el criterio sólo falla en el caso que nos ocupa, que es justo el del generador.
+Para un primer vistazo rápido sirve neutralizar los ids antes de comparar
+(`sed -E 's/_[a-z0-9]{5}"/_X"/g'`); la comparación pista a pista sigue haciendo falta al
+final, porque esa además detecta una reordenación que el diff textual deja pasar.
 
 **Trampas del generador, ya pagadas una vez:**
 
@@ -157,12 +170,33 @@ tree_root = AnimationNodeBlendTree
 └── Blend2 filtrado                  las pistas del tren superior vienen de Torso
 ```
 
-**Lo mejor de esta forma: `state_animation_tree.gd` no se toca.** Se cuelgan **DOS** nodos
-del jugador, cada uno con su `playback_parameter` (`parameters/Piernas/playback` y
-`parameters/Torso/playback`) y su propio mapa `animations`. El de piernas ignora
-`KIT_ACTION`; el de torso es el que escucha `pose_changed`. El componente ya es
-configurable por `@export` justamente para esto — si hace falta cambiarlo, parar y
-replantear.
+**Cómo se monta: DOS nodos, y `state_animation_tree.gd` SÍ se toca** (el "no se toca" de la
+versión anterior era un error). Se cuelgan **DOS** nodos del jugador, cada uno con su
+`playback_parameter` (`parameters/Piernas/playback` y `parameters/Torso/playback`) y su
+propio mapa `animations`. El de torso es el que escucha `pose_changed`. El de piernas
+escucha el estado, pero **el estado no basta durante `KIT_ACTION`**: guardando, el escudo
+deja `_busy = true` de forma sostenida y `_settle_state` mete `KIT_ACTION` aunque se esté
+andando, así que un mapa de estados que "ignore `KIT_ACTION`" deja las piernas congeladas
+en la última pose — el mismo deslizamiento, en otra capa.
+
+La capa de piernas necesita su propia noción de "¿ando?", y esa sólo sale de `velocity`
+(comprobar `root is CharacterBody2D`, nunca castear a `Player`): con `KIT_ACTION` y
+`|velocity.x| > umbral` elige `walk`, si no `idle`. Es la MISMA lectura de velocidad que
+introduce la Fase 1, así que la Fase 2 depende de ella y no es un cambio sólo de datos:
+hay que añadir al componente un override por velocidad análogo al `_pose` que hoy existe
+para la señal. No se puede mapear `KIT_ACTION → walk` a pelo: un ataque quieto haría correr
+las piernas. Las dos fases, bien encajadas, se refuerzan — la escala por velocidad de la
+Fase 1 aplicada a un `walk` disparado por velocidad resuelve a la vez el patinaje y el
+desajuste del 45 % de la guardia. `StateAnimationTree` sigue sin conocer a `Player` ni a
+los kits: lee hechos de su propia entidad, que es autoconocimiento (§5).
+
+**Alternativa considerada y descartada**, anotada para que no se re-litigue: arreglar el
+ESTADO en vez de la animación, haciendo que el `Player` no entre en `KIT_ACTION` mientras
+la guardia esté alta y se esté andando. Es tentador —`KIT_ACTION` significa "el kit se
+adueñó del control" y guardando el jugador sí se mueve, al 45 %—, pero `replicated_state`
+viaja por red y lo consumen el HUD y el `StateAnimator` del enemigo: cambiar qué significa
+un estado es más caro que añadir una lectura de velocidad, y se paga en sitios que no se
+ven desde aquí.
 
 **Las poses hay que partirlas** (de ahí la Fase 0): `walk` deja de tocar torso y brazos;
 `guard` deja de tocar cadera y piernas. Ojo con una consecuencia concreta: hoy `guard` se
@@ -188,7 +222,9 @@ capa de piernas y **quitar las aristas directas** `fall → idle` y `fall → wa
 sólo `fall → land` y `land → {idle, walk}`. El pathfinding de `travel()` pasa entonces
 obligatoriamente por `land`. La salida de `land` va con
 `advance_mode = ADVANCE_MODE_AUTO` (verificado que existe) para que se encadene sola al
-terminar.
+terminar. Ojo con el `xfade_time` de las aristas hacia `land`: un fundido de 0,12 s se
+come un aterrizaje corto — las entradas a `land` van con fundido mínimo, o el impacto
+vuelve a no leerse.
 
 **Verificar en ejecución** que `travel()` reproduce de verdad los nodos intermedios del
 camino y no salta al destino. Si no lo hiciera, la alternativa es un estado `LAND`
@@ -216,6 +252,24 @@ sirve monta DOS enemigos con arquetipos distintos** — con uno solo el código 
 Segunda trampa: el arquetipo escala el cuerpo (44 px hoy), y el rig está dibujado para 44
 de alto. O el rig se escala con el arquetipo, o un enemigo grande saldrá con un cuerpo de
 120 y un dibujo de 44 — que es literalmente lo que ya pasó una vez.
+
+Tercera trampa: la ventana de daño del golpe enemigo vive en `enemy_animations.tres` como
+pistas **method** (`open_window` / `close_window` sobre `Attacker`). Si se pierden, el
+enemigo deja de hacer daño y los tests de `Hitbox` aislada pasan igual — trampa nº2, literal.
+
+Pero **fusionarlas en la biblioteca del rig no hace falta**, y conviene no hacerlo.
+Comprobado sobre la escena: el `AnimationPlayer` del enemigo es hijo DIRECTO y se llama
+exactamente así, y `ComponentLookup.find` prueba primero `get_node_or_null("AnimationPlayer")`
+— sólo cae a "el primero de ese tipo a cualquier profundidad" si ese nombre falla. Un
+`BodyAnimationPlayer` dentro del rig no se lo quita mientras el de combate conserve su
+nombre y su sitio. Es la misma solución que ya lleva el jugador, y está escrita en un
+comentario de `player.tscn`.
+
+Lo que sí se rompe en silencio: `enemy_strike` anima **`Visuals/Body:scale`**, y
+`Visuals/Body` es justamente el `Polygon2D` rectangular que el rig viene a sustituir. Esa
+pista quedaría apuntando a un nodo inexistente —sin error, sin aviso— y el golpe perdería
+su deformación. Reapuntarla a un hueso del rig, o retirarla. La otra pista,
+`Visuals/Hitbox:position`, sobrevive: la hitbox no se toca.
 
 ---
 
