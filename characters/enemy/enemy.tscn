@@ -1,4 +1,4 @@
-[gd_scene load_steps=19 format=3]
+[gd_scene load_steps=23 format=3]
 
 [ext_resource type="Script" path="res://characters/enemy/enemy.gd" id="1"]
 [ext_resource type="Script" path="res://components/stats_component.gd" id="2"]
@@ -14,6 +14,10 @@
 [ext_resource type="AnimationLibrary" path="res://characters/enemy/enemy_animations.tres" id="12"]
 [ext_resource type="Resource" path="res://characters/enemy/archetypes/grunt.tres" id="13"]
 [ext_resource type="Script" path="res://components/state_animator.gd" id="14"]
+[ext_resource type="PackedScene" path="res://characters/common/body_rig.tscn" id="15"]
+[ext_resource type="AnimationLibrary" path="res://characters/player/player_animations.tres" id="16"]
+[ext_resource type="AnimationNodeBlendTree" path="res://characters/player/player_pose_machine.tres" id="17"]
+[ext_resource type="Script" path="res://components/state_animation_tree.gd" id="18"]
 
 [sub_resource type="RectangleShape2D" id="BodyShape"]
 resource_local_to_scene = true
@@ -95,9 +99,23 @@ script = ExtResource("8")
 
 [node name="Visuals" type="Node2D" parent="."]
 
-[node name="Body" type="Polygon2D" parent="Visuals"]
-color = Color(0.8, 0.28, 0.3, 1)
-polygon = PackedVector2Array(-22, -44, 22, -44, 22, 0, -22, 0)
+; El cuerpo es el rig compartido con el jugador. El color de rol (rojo) y la
+; escala salen de `_apply_body_size` (modulate + scale sobre este nodo).
+[node name="Skeleton" parent="Visuals" instance=ExtResource("15")]
+
+; El `AnimationPlayer` del cuerpo NO se llama "AnimationPlayer": el `Attacker`
+; busca el suyo con `ComponentLookup` y, de llamarse así, se llevaría este en
+; vez del de combate (enemy_strike), que es hijo directo del enemigo.
+[node name="BodyAnimationPlayer" type="AnimationPlayer" parent="Visuals"]
+libraries = {
+"": ExtResource("16")
+}
+
+[node name="AnimationTree" type="AnimationTree" parent="Visuals"]
+tree_root = ExtResource("17")
+anim_player = NodePath("../BodyAnimationPlayer")
+callback_mode_process = 0
+active = true
 
 [node name="Hitbox" type="Area2D" parent="Visuals"]
 position = Vector2(6, -22)
@@ -128,6 +146,33 @@ script = ExtResource("14")
 animations = {
 2: &"enemy_strike"
 }
+
+; El cuerpo se anima en dos capas, como el jugador. El mapa usa `Enemy.State`:
+; IDLE=0, WALK=1, ATTACK=2, HURT=3, DOWNED=4. Atacando, las piernas deciden
+; andar por velocidad (el gesto de la garra es aparte, en enemy_strike).
+[node name="LegsAnimator" type="Node" parent="."]
+script = ExtResource("18")
+animations = {
+0: &"idle",
+1: &"walk",
+4: &"downed"
+}
+pose_signal = &""
+playback_parameter = &"parameters/Piernas/playback"
+walk_scale_parameter = &"parameters/Piernas/walk/Escala/scale"
+walk_by_velocity_states = Array[int]([2])
+blend_parameter = &"parameters/Mezcla/blend_amount"
+
+[node name="TorsoAnimator" type="Node" parent="."]
+script = ExtResource("18")
+animations = {
+3: &"hurt",
+4: &"downed"
+}
+pose_signal = &""
+playback_parameter = &"parameters/Torso/playback"
+default_pose = &"neutral"
+walk_reference_speed = 0.0
 
 [node name="MultiplayerSynchronizer" type="MultiplayerSynchronizer" parent="."]
 replication_config = SubResource("ReplicationConfig")

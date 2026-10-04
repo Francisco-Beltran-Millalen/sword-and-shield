@@ -161,8 +161,10 @@ func _apply_archetype() -> void:
 	_apply_body_size(archetype.body_size)
 
 
-## El cuadrado: forma de colisión, hurtbox y polígono salen todos de la misma
-## medida, para que no puedan descuadrarse entre sí.
+## El cuerpo: forma de colisión y hurtbox salen de la misma medida que el
+## arquetipo. El dibujo es el rig compartido con el jugador (`body_rig.tscn`),
+## dibujado a 44 px de alto: se escala con la medida del arquetipo y el color de
+## rol sale por `modulate`, no duplicando polígonos.
 func _apply_body_size(size: Vector2) -> void:
 	var half := size * 0.5
 	var centre := Vector2(0.0, -half.y)
@@ -179,13 +181,10 @@ func _apply_body_size(size: Vector2) -> void:
 			hurt_rect.size = size
 		hurt_shape.position = centre
 
-	var polygon := visuals.get_node_or_null("Body") as Polygon2D
-	if polygon != null:
-		polygon.polygon = PackedVector2Array([
-			Vector2(-half.x, -size.y), Vector2(half.x, -size.y),
-			Vector2(half.x, 0.0), Vector2(-half.x, 0.0),
-		])
-		polygon.color = archetype.body_color
+	var rig := visuals.get_node_or_null("Skeleton") as Node2D
+	if rig != null:
+		rig.scale = Vector2.ONE * (size.y / 44.0)
+		rig.modulate = archetype.body_color
 
 
 func _setup_states() -> void:

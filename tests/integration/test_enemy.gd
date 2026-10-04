@@ -226,3 +226,29 @@ func test_dos_enemigos_distintos_no_se_pisan_el_cuerpo() -> void:
 			"el segundo enemigo conserva el suyo")
 
 	grande.queue_free()
+
+
+func test_el_enemigo_estrena_el_rig_compartido() -> void:
+	# Fase 4. El cuerpo ya no es un rectángulo: es el rig de `body_rig.tscn`, y la
+	# escala y el color de rol salen de `_apply_body_size` (modulate + scale), no
+	# de polígonos duplicados. Dos enemigos con arquetipos distintos no se pisan.
+	enemy = _spawn_enemy(Vector2(300.0, 0.0))
+	var arquetipo_grande := _archetype_de_prueba(Vector2(120.0, 120.0), 900.0)
+	arquetipo_grande.body_color = Color(0.2, 0.5, 0.9, 1.0)
+	var grande := _spawn_enemy(Vector2(700.0, 0.0), false, arquetipo_grande)
+	await h.tick_physics(2)
+
+	var rig := enemy.get_node("Visuals/Skeleton") as Node2D
+	assert_not_null(rig, "el enemigo estrena el rig compartido")
+	assert_true(rig.get_node("Hip") is Bone2D, "el rig trae sus huesos")
+	assert_eq(rig.scale, Vector2.ONE, "el recluta de 44 px no escala el rig")
+	assert_almost_eq(rig.modulate.r, enemy.archetype.body_color.r, 0.01,
+			"el color de rol sale por modulate")
+
+	var rig_grande := grande.get_node("Visuals/Skeleton") as Node2D
+	assert_almost_eq(rig_grande.scale.y, 120.0 / 44.0, 0.01,
+			"el enemigo de 120 px escala el rig (quedó en %.2f)" % rig_grande.scale.y)
+	assert_almost_eq(rig_grande.modulate.b, 0.9, 0.01,
+			"y el segundo enemigo no le impone su color al primero")
+
+	grande.queue_free()

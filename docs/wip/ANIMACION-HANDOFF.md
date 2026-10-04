@@ -1,10 +1,12 @@
 # Animación — estado y plan, para retomarlo de cero
 
-**Estado: el jugador está animado y la suite está verde. El plan de abajo NO está
-empezado.** Baseline: 21 scripts, 229 tests, 229 pasando (`eedb4de`).
+**Estado: Fases 0 a 4 ejecutadas, suite en verde (21 scripts, 233 tests). Queda la
+Fase 5** —el kit cuelga de la mano—, que es la más invasiva: toca `equip_kit`, el volteo
+y la `GuardBox`. Las fases hechas dejaron hallazgos medidos anotados abajo (NESTED y no
+GROUPED, `ADVANCE_MODE_ENABLED` y no DISABLED, el `land` como fundido de salida).
 
-No hay nada roto ni a medias. Lo que hay es un sistema que funciona y cuatro huecos
-**medidos**, no intuidos. Cada fase de abajo lleva su medición de partida, su test y su
+Lo que hay hoy es un sistema que funciona, con los cuatro huecos originales cerrados o
+resueltos por el camino. Cada fase de abajo lleva su medición de partida, su test y su
 forma de verlo.
 
 ---
@@ -121,6 +123,14 @@ final, porque esa además detecta una reordenación que el diff textual deja pas
 no. Se arregla escalando el tiempo de la animación con la velocidad real (§13: lo hace el
 motor, no un contador propio).
 
+**Revisado al ejecutarlo — el objetivo "a ~0" era imposible.** Plantar el pie a 220 px/s
+con piernas de 11 px exige ~8× de escala (~27 pasos/s) y las piernas parpadean como un
+seizure. El arreglo final **acota** la escala con `max_walk_scale = 2,0` (`state_animation_tree.gd`):
+cadencia natural (~6,7 pasos/s) y patinaje de ~2,8 px/frame — mejor que los 4,62 de
+partida sin el parpadeo. Es el compromiso estándar de los metroidvania; plantar el pie de
+verdad exige bajar la velocidad de marcha (220 → ~100) y retocar la geometría
+(`OPENING_WIDTH` salta con carrerilla).
+
 **Verificado que existe en 4.7:** un `AnimationNodeBlendTree` **sí** puede ser un estado
 del `AnimationNodeStateMachine`. Así que el estado `walk` pasa de ser un
 `AnimationNodeAnimation` a un BlendTree con `Anim → TimeScale → output`, y queda un
@@ -158,8 +168,15 @@ cualquier motor: las piernas hacen locomoción y el tren superior hace lo del ki
 Verificado que las dos piezas existen en 4.7:
 
 - `AnimationNodeBlend2` con `filter_enabled` y `set_filter_path()` por pista.
-- `AnimationNodeStateMachine` **anidado** dentro de un `AnimationNodeBlendTree`
-  (`state_machine_type = STATE_MACHINE_TYPE_GROUPED`).
+- `AnimationNodeStateMachine` **anidado** dentro de un `AnimationNodeBlendTree`.
+  OJO, medido al ejecutarlo: el tipo correcto es `STATE_MACHINE_TYPE_NESTED`, **no
+  `GROUPED`**. Con `GROUPED` el playback se marca `is_grouped` y sus `travel()` /
+  `start()` fallan con `Condition "is_grouped" is true` — un playback agrupado lo
+  conduce su máquina de estados PADRE, que aquí no existe porque la raíz es un
+  `BlendTree`. `NESTED` deja `travel()`/`start()` libres y la capa es controlable
+  desde `parameters/Piernas/playback` y `parameters/Torso/playback`. También se
+  midió: el parámetro del `Blend2` se llama `blend_amount` (no `blend`), y es
+  `StateAnimationTree` quien lo fija a 1 cada frame — no se serializa en el `.tres`.
 
 **Forma propuesta:**
 
@@ -229,6 +246,23 @@ vuelve a no leerse.
 **Verificar en ejecución** que `travel()` reproduce de verdad los nodos intermedios del
 camino y no salta al destino. Si no lo hiciera, la alternativa es un estado `LAND`
 transitorio en `Player.State` — más caro, porque engorda el orquestador.
+
+**Tres hallazgos medidos al ejecutarlo**, que el plan de arriba no anticipaba:
+
+1. **Las aristas normales van con `ADVANCE_MODE_ENABLED`, no `DISABLED`.** El A* de
+   `travel()` descarta las aristas `DISABLED` (`_make_travel_path` hace `continue`), así
+   que con `DISABLED` **teletransporta** al destino: ni fundido ni nodos intermedios. Es
+   un fallo latente que arrastraba el `.tres` original —el "xfade 0,12" nunca se aplicó—.
+   `AUTO` queda sólo para las salidas de `land`.
+2. **El A* decide por POSICIONES de los nodos** (distancia 2D × prioridad), no por
+   semántica. Con los nodos en línea, `fall → jump → idle` es geométricamente más corto
+   que `fall → land → idle` y el aterrizaje se colaba por `jump`. Se arregla **colocando
+   `land` entre `idle` y `walk`** en el layout (`idle · land · walk · jump · fall ·
+   downed`), no con más poda — `fall → jump` hace falta para el doble salto.
+3. **`land` se reproduce como fundido de salida, no como nodo actual.** `travel()` entra
+   en `land` con xfade 0 y al frame siguiente ya está fundiendo `land → idle` (0,12 s),
+   así que `get_current_node()` devuelve `idle` y `land` está en `get_fading_from_node()`.
+   El test lo caza por `fading_from`, no por la pose actual.
 
 ---
 

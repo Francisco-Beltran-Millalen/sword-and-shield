@@ -25,11 +25,11 @@ const HUESOS: Array[String] = [
 	HIP + "/LegBack", HIP + "/LegBack/ShinBack",
 	HIP + "/LegFront", HIP + "/LegFront/ShinFront",
 ]
-## Articulaciones de segundo segmento que TIENEN que doblarse al andar. El
-## antebrazo delantero no está: ese brazo se mantiene quieto a propósito porque
-## sujeta el kit, que cuelga del `Player` y no de la mano.
+## Articulaciones de segundo segmento que TIENEN que doblarse al andar. Los codos
+## ya no están: desde la Fase 2 el `walk` es sólo de piernas — el tren superior
+## queda en `neutral` durante la locomoción y los brazos sólo se mueven al
+## atacar o guardar.
 const ARTICULACIONES: Array[String] = [
-	TORSO + "/ArmBack/ForearmBack",
 	HIP + "/LegBack/ShinBack", HIP + "/LegFront/ShinFront",
 ]
 ## Los dos pies, para medir el apoyo.
@@ -68,7 +68,8 @@ func test_ningun_nodo_del_jugador_se_quedo_sin_script() -> void:
 	# se instancia igual, así que la suite entera puede seguir en verde.
 	var esperados := {
 		".": "player.gd",
-		"StateAnimationTree": "state_animation_tree.gd",
+		"LegsAnimator": "state_animation_tree.gd",
+		"TorsoAnimator": "state_animation_tree.gd",
 		"StateMachine": "state_machine.gd",
 		"Kit": "sword_kit.gd",
 	}
@@ -86,10 +87,18 @@ func test_el_arbol_de_animacion_esta_vivo_y_conoce_sus_poses() -> void:
 	var tree := _tree()
 	assert_not_null(tree, "falta el AnimationTree")
 	assert_true(tree.active, "el AnimationTree tiene que estar activo")
-	var raiz := tree.tree_root as AnimationNodeStateMachine
-	assert_not_null(raiz, "§13 pide un AnimationNodeStateMachine, no un árbol suelto")
-	for pose in ["idle", "walk", "jump", "fall", "hurt", "downed", "attack", "guard"]:
-		assert_true(raiz.has_node(pose), "el grafo no conoce la pose '%s'" % pose)
+	# Fase 2: la raíz es un BlendTree con DOS state machines anidadas. La capa de
+	# piernas lleva la locomoción y la de torso el kit.
+	var raiz := tree.tree_root as AnimationNodeBlendTree
+	assert_not_null(raiz, "Fase 2 pide un AnimationNodeBlendTree raíz con dos capas")
+	var piernas := raiz.get_node(&"Piernas") as AnimationNodeStateMachine
+	var torso := raiz.get_node(&"Torso") as AnimationNodeStateMachine
+	assert_not_null(piernas, "falta la capa de piernas")
+	assert_not_null(torso, "falta la capa de torso")
+	for pose in ["idle", "walk", "jump", "fall", "downed"]:
+		assert_true(piernas.has_node(pose), "la capa de piernas no conoce '%s'" % pose)
+	for pose in ["neutral", "attack", "guard", "hurt", "downed"]:
+		assert_true(torso.has_node(pose), "la capa de torso no conoce '%s'" % pose)
 
 
 # ---------------------------------------------------------------- proporción
@@ -159,21 +168,61 @@ func test_la_pose_sigue_al_estado() -> void:
 	assert_eq(_pose(), &"fall", "bajando, el cuerpo cae")
 
 
+func test_el_aterrizaje_pasa_por_land() -> void:
+	# Fase 3. Al tocar suelo, `travel()` de `fall` a `idle` tiene que reproducir
+	# el nodo intermedio `land` — no saltar en seco. Las aristas directas
+	# `fall → idle` y `fall → walk` están podadas para obligar el camino. El
+	# `land` aparece como fundido de salida (`fading_from`), no como nodo actual.
+	await h.settle_on_floor()
+	h.sword_input.press_jump()
+	await _avanzar(4)
+
+	var vio_land := false
+	for _i in range(120):
+		await _avanzar(1)
+		if _fading_from() == &"land" or _pose() == &"land":
+			vio_land = true
+		if _pose() == &"idle" and vio_land:
+			break
+	assert_true(vio_land, "el aterrizaje no pasó por la pose `land`")
+
+
 func test_el_kit_manda_sobre_el_estado_al_atacar_y_al_guardar() -> void:
 	# `KIT_ACTION` es UN estado para atacar y guardar: sin la pose que anuncia el
 	# kit, el escudo haría el gesto de la espada.
 	await h.settle_on_floor()
 	h.sword_input.press_attack()
 	await _avanzar(4)
-	assert_eq(_pose(), &"attack", "la espada ataca")
+	assert_eq(_pose_torso(), &"attack", "la espada ataca")
 
 	h.shield_input.set_guard(true)
 	await _avanzar(4)
-	assert_eq(_pose(h.shield_player), &"guard", "el escudo guarda")
+	assert_eq(_pose_torso(h.shield_player), &"guard", "el escudo guarda")
 
 	h.shield_input.set_guard(false)
 	await _avanzar(20)
-	assert_ne(_pose(h.shield_player), &"guard", "al soltar, la guardia baja")
+	assert_ne(_pose_torso(h.shield_player), &"guard", "al soltar, la guardia baja")
+
+
+func test_andar_con_la_guardia_alta_mueve_las_piernas() -> void:
+	# Fase 2. Guardando, `KIT_ACTION` se adueñaba del cuerpo entero y la pose
+	# `guard` dejaba el muslo en 0,008 rad mientras el cuerpo se deslizaba. Ahora
+	# la capa de piernas decide andar por velocidad y la de torso guarda a la vez.
+	await h.settle_on_floor()
+	h.shield_input.set_guard(true)
+	h.shield_input.set_move(1.0)
+	await _avanzar(10)
+
+	assert_eq(_pose_torso(h.shield_player), &"guard",
+			"el torso tiene que guardar mientras anda")
+
+	var muslo: Array[float] = []
+	for _i in range(40):
+		await _avanzar(1)
+		muslo.append(_hueso(HIP + "/LegFront", h.shield_player).rotation)
+	var recorrido: float = muslo.max() - muslo.min()
+	assert_gt(recorrido, 0.2,
+			"el muslo no anda mientras se guarda (recorrió %.3f rad)" % recorrido)
 
 
 func test_el_combo_rearranca_el_gesto_del_cuerpo() -> void:
@@ -191,11 +240,11 @@ func test_el_combo_rearranca_el_gesto_del_cuerpo() -> void:
 	h.sword_input.press_attack()
 
 	var rearranques := 0
-	var anterior := _tiempo_de_pose()
+	var anterior := _tiempo_de_pose_torso()
 	for _i in range(48):
 		await _avanzar(1)
-		var ahora := _tiempo_de_pose()
-		if _pose() == &"attack" and ahora < anterior - 0.01:
+		var ahora := _tiempo_de_pose_torso()
+		if _pose_torso() == &"attack" and ahora < anterior - 0.01:
 			rearranques += 1
 		anterior = ahora
 
@@ -215,34 +264,29 @@ func test_mirar_a_la_izquierda_voltea_el_muneco_entero() -> void:
 	assert_lt(izquierda, 0.0, "mirando a la izquierda, el ojo cambia de lado")
 
 
-func test_la_cadera_y_el_torso_contra_rotan_al_andar() -> void:
-	# Cadera y torso son huesos distintos justamente para esto: si giran juntos,
-	# el muñeco pivota en bloque y no hay transferencia de peso que leer. Lo que
-	# se mide es que la pelvis bascula MUCHO más que el tronco en el mundo.
+func test_la_cadera_bascula_al_andar() -> void:
+	# La cadera bascula durante el ciclo: es la transferencia de peso que se lee
+	# en la pelvis. La contra-rotación del tronco se perdió en la Fase 2 —el
+	# `walk` es sólo de piernas y el torso queda en `neutral`—, así que aquí ya no
+	# se compara el tronco contra la cadera, sólo que la pelvis siga viva.
 	await h.settle_on_floor()
 	h.sword_input.set_move(1.0)
 	await _avanzar(10)
 
 	var cadera: Array[float] = []
-	var tronco: Array[float] = []
 	for _i in range(40):
 		await _avanzar(1)
 		cadera.append(_hueso(HIP).rotation)
-		tronco.append(_hueso(TORSO).global_rotation)
 
 	# `Array.max()` devuelve Variant aunque el array esté tipado: sin el tipo
 	# explícito el script no compila, y GUT omite en silencio lo que no compila.
 	var recorrido_cadera: float = cadera.max() - cadera.min()
-	var recorrido_tronco: float = tronco.max() - tronco.min()
 	assert_gt(recorrido_cadera, 0.08,
 			"la cadera tiene que bascular durante el ciclo (recorrió %.3f rad)"
 			% recorrido_cadera)
-	assert_lt(recorrido_tronco, recorrido_cadera,
-			"el tronco (%.3f rad) tiene que moverse MENOS que la cadera (%.3f): eso es la contra-rotación"
-			% [recorrido_tronco, recorrido_cadera])
 
 
-func test_las_rodillas_y_los_codos_se_doblan() -> void:
+func test_las_rodillas_se_doblan() -> void:
 	await h.settle_on_floor()
 	h.sword_input.set_move(1.0)
 	await _avanzar(10)
@@ -331,6 +375,24 @@ func test_el_pie_apoyado_retrocede_respecto_al_cuerpo() -> void:
 	assert_gt(comprobados, 0, "ningún pie llegó a apoyarse durante el ciclo")
 
 
+func test_el_pie_apoyado_no_se_desliza_en_el_mundo() -> void:
+	# Fase 1. Mide el pie en coordenadas de MUNDO: un pie plantado no se mueve. La
+	# escala del ciclo la escribe `StateAnimationTree` leyendo la velocidad real,
+	# pero va ACOTADA por `max_walk_scale` (2×): plantar el pie a 220 px/s con
+	# piernas de 11 px exigía ~8× y las piernas parpadeaban. Con el tope la
+	# cadencia es natural y el pie patina un poco (~2,8 px/frame), que aun así es
+	# mejor que el 4,62 px/frame de antes de la Fase 1.
+	await h.settle_on_floor()
+	h.sword_input.set_move(1.0)
+	await _avanzar(16)
+
+	var desliza: float = await _medir_deslizamiento_del_pie(h.sword_player)
+	assert_gt(desliza, -0.5, "ningún pie llegó a apoyarse durante el ciclo")
+	assert_lt(desliza, 3.5,
+			"el pie apoyado se desliza %.2f px/frame en el mundo (0 = plantado)"
+			% desliza)
+
+
 # ------------------------------------------------------------------ ayudantes
 
 ## El `AnimationTree` del jugador corre en el bucle de FÍSICA (ver `player.tscn`),
@@ -346,21 +408,40 @@ func _tree(jugador: Player = null) -> AnimationTree:
 	return quien.get_node_or_null("Visuals/AnimationTree") as AnimationTree
 
 
-func _playback(jugador: Player = null) -> AnimationNodeStateMachinePlayback:
+func _playback(jugador: Player = null, parametro: String = "parameters/Piernas/playback") -> AnimationNodeStateMachinePlayback:
 	var tree := _tree(jugador)
 	if tree == null:
 		return null
-	return tree.get("parameters/playback") as AnimationNodeStateMachinePlayback
+	return tree.get(parametro) as AnimationNodeStateMachinePlayback
 
 
+## Pose actual de la capa de PIERNAS (locomoción).
 func _pose(jugador: Player = null) -> StringName:
 	var playback := _playback(jugador)
+	return playback.get_current_node() if playback != null else &""
+
+
+## Pose actual de la capa de TORSO (kit).
+func _pose_torso(jugador: Player = null) -> StringName:
+	var playback := _playback(jugador, "parameters/Torso/playback")
 	return playback.get_current_node() if playback != null else &""
 
 
 func _tiempo_de_pose(jugador: Player = null) -> float:
 	var playback := _playback(jugador)
 	return playback.get_current_play_position() if playback != null else -1.0
+
+
+func _tiempo_de_pose_torso(jugador: Player = null) -> float:
+	var playback := _playback(jugador, "parameters/Torso/playback")
+	return playback.get_current_play_position() if playback != null else -1.0
+
+
+## Nodo del que se está fundiendo en la capa de piernas. El `land` se reproduce
+## como fundido de salida hacia `idle`/`walk`, no como nodo "actual".
+func _fading_from(jugador: Player = null) -> StringName:
+	var playback := _playback(jugador)
+	return playback.get_fading_from_node() if playback != null else &""
 
 
 ## La racha consecutiva más larga en la que ese pie estuvo tocando el suelo,
@@ -428,3 +509,42 @@ func _caja(rutas: Array, jugador: Player = null) -> Rect2:
 			else:
 				caja = caja.expand(local)
 	return caja
+
+
+## Caja que ocupan esas piezas, en coordenadas de MUNDO (para medir el patinaje).
+func _caja_mundo(rutas: Array, jugador: Player = null) -> Rect2:
+	var quien: Player = jugador if jugador != null else h.sword_player
+	var visuals: Node2D = quien.get_node("Visuals")
+	var caja := Rect2()
+	var primera := true
+	for ruta: String in rutas:
+		var pieza := visuals.get_node(ruta) as Polygon2D
+		assert_not_null(pieza, "falta la pieza '%s'" % ruta)
+		for punto in pieza.polygon:
+			var mundo: Vector2 = pieza.global_transform * punto
+			if primera:
+				caja = Rect2(mundo, Vector2.ZERO)
+				primera = false
+			else:
+				caja = caja.expand(mundo)
+	return caja
+
+
+## El menor desplazamiento por frame del pie, en coordenadas de mundo. Es la
+## velocidad del pie durante su fase de apoyo: 0 = plantado, y un pie que patina
+## nunca baja de ~3 px/frame porque el cuerpo lo arrastra. Devuelve -1 si no se
+## llegó a medir. Se usa el mínimo y no el máximo porque el máximo es el balanceo.
+func _medir_deslizamiento_del_pie(jugador: Player) -> float:
+	var minimo := INF
+	for pie in PIES:
+		var prev_x := 0.0
+		var primero := true
+		for _i in range(60):
+			await _avanzar(1)
+			var caja := _caja_mundo([pie], jugador)
+			var x: float = caja.get_center().x
+			if not primero:
+				minimo = minf(minimo, absf(x - prev_x))
+			primero = false
+			prev_x = x
+	return minimo if minimo < INF else -1.0

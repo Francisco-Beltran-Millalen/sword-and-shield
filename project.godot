@@ -26,23 +26,12 @@ SessionState="*res://autoloads/session_state.gd"
 window/size/viewport_width=1920
 window/size/viewport_height=1080
 window/stretch/mode="canvas_items"
-; `keep` y no `expand`. Medido con un `SubViewport`: con `expand`, en cuanto la
-; ventana pasa de ~17:9 la vista supera los 1280 px de la sala, los `limit_*` de
-; la cámara dejan de poder cumplirse y esta se CLAVA en el centro —deja de seguir
-; en X— enseñando 160 px de las salas vecinas por lado en 21:9 y 435 en 3440x1440.
-; En un metroidvania eso regala el descubrimiento a quien tenga el monitor más
-; ancho. `keep` fija la proporción y todos ven exactamente lo mismo, al precio de
-; barras: lo resuelve el motor, sin tocar el zoom ni la cámara (§13).
-window/stretch/aspect="keep"
 
 [editor_plugins]
 
 enabled=PackedStringArray("res://addons/gut/plugin.cfg")
 
 [input]
-
-; Un solo juego de acciones: cada cliente controla un personaje.
-; Remapeables desde el panel de entrada del editor.
 
 move_left={
 "deadzone": 0.2,
@@ -116,11 +105,5 @@ debug_overlay={
 
 [rendering]
 
-; El vacío no puede pesar más que la materia: sin esto, el fondo es el gris
-; (0.3,0.3,0.3) por defecto de Godot y los sólidos son MÁS OSCUROS que él, así
-; que la sala se lee como un hueco recortado sobre una placa clara. Lo hace el
-; motor: no hace falta un `ColorRect` en un `CanvasLayer` por zona (§13).
-environment/defaults/default_clear_color=Color(0.06, 0.07, 0.085, 1)
-renderer/rendering_method="forward_plus"
-renderer/rendering_method.mobile="mobile"
 textures/canvas_textures/default_texture_filter=0
+environment/defaults/default_clear_color=Color(0.06, 0.07, 0.085, 1)

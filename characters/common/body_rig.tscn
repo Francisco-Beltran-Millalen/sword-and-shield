@@ -1,0 +1,185 @@
+[gd_scene load_steps=2 format=3]
+
+; El cuerpo articulado compartido: un Skeleton2D con 11 Bone2D y una primitiva
+; rígida por hueso (cut-out, no skinning). Lo instancian el jugador y el enemigo
+; bajo sus `Visuals`. El color de ROL se aplica con `modulate` del nodo raíz
+; (espada = blanco, enemigo = rojo), no duplicando polígonos.
+;
+; El `AnimationPlayer` del cuerpo y el `AnimationTree` NO viven aquí: cuelgan de
+; `Visuals` del anfitrión, con las pistas escritas `Skeleton/...` contra este
+; nodo. El `BodyAnimationPlayer` se llama así a propósito — el `Attacker` del kit
+; busca un `AnimationPlayer` con `ComponentLookup` y caería al primero que
+; encuentre si este se llamara "AnimationPlayer".
+[node name="Skeleton" type="Skeleton2D"]
+
+[node name="Hip" type="Bone2D" parent="."]
+position = Vector2(0, -11)
+rest = Transform2D(1, 0, 0, 1, 0, -11)
+auto_calculate_length_and_angle = false
+length = 11.0
+bone_angle = -1.5708
+
+[node name="Torso" type="Bone2D" parent="Hip"]
+position = Vector2(0, 0)
+rest = Transform2D(1, 0, 0, 1, 0, 0)
+auto_calculate_length_and_angle = false
+length = 11.0
+bone_angle = -1.5708
+
+[node name="TorsoShape" type="Polygon2D" parent="Hip/Torso"]
+color = Color(0.36, 0.66, 0.86, 1)
+polygon = PackedVector2Array(-7, -11, 7, -11, 7, 0, -7, 0)
+
+[node name="Head" type="Bone2D" parent="Hip/Torso"]
+position = Vector2(0, -11)
+rest = Transform2D(1, 0, 0, 1, 0, -11)
+auto_calculate_length_and_angle = false
+length = 22.0
+bone_angle = -1.5708
+
+[node name="HeadShape" type="Polygon2D" parent="Hip/Torso/Head"]
+z_index = 1
+color = Color(0.52, 0.78, 0.94, 1)
+polygon = PackedVector2Array(0, -22, 4.21, -21.16, 7.78, -18.78, 10.16, -15.21, 11, -11, 10.16, -6.79, 7.78, -3.22, 4.21, -0.84, 0, 0, -4.21, -0.84, -7.78, -3.22, -10.16, -6.79, -11, -11, -10.16, -15.21, -7.78, -18.78, -4.21, -21.16)
+
+; Un solo ojo, en el lado al que se mira. Es lo que hace legible el facing
+; cuando el kit no está a la vista (guardia baja, espada en reposo).
+[node name="Eye" type="Polygon2D" parent="Hip/Torso/Head"]
+z_index = 2
+color = Color(0.1, 0.14, 0.2, 1)
+polygon = PackedVector2Array(4.5, -15.1, 6.03, -14.6, 6.97, -13.3, 6.97, -11.7, 6.03, -10.4, 4.5, -9.9, 2.97, -10.4, 2.03, -11.7, 2.03, -13.3, 2.97, -14.6)
+
+; Pantorrillas y antebrazos terminan en CÁPSULA, no en rectángulo, y eso no es
+; estética: la esquina de un rectángulo rotado baja `largo·cos θ + ancho/2·|sin θ|`,
+; así que con la pierna abierta en el contacto el pie se hundía 1,3 px bajo el
+; suelo aunque la cadena de huesos cuadrara al milímetro. Un extremo redondeado
+; no puede bajar más que estirado. Medido en la tira de fotogramas del andar.
+;
+; El reparto de `z_index` es lo único que fija el orden de dibujo: la jerarquía
+; de huesos manda que los miembros sean hermanos, y por orden de árbol se
+; dibujarían todos por delante. Negativo = detrás del torso.
+[node name="ArmBack" type="Bone2D" parent="Hip/Torso"]
+position = Vector2(-8.5, -9)
+rest = Transform2D(1, 0, 0, 1, -8.5, -9)
+auto_calculate_length_and_angle = false
+length = 6.0
+bone_angle = 1.5708
+
+[node name="ArmBackShape" type="Polygon2D" parent="Hip/Torso/ArmBack"]
+z_index = -2
+color = Color(0.26, 0.48, 0.67, 1)
+polygon = PackedVector2Array(-2.5, -2.5, 2.5, -2.5, 2.5, 6, -2.5, 6)
+
+[node name="ForearmBack" type="Bone2D" parent="Hip/Torso/ArmBack"]
+position = Vector2(0, 6)
+rest = Transform2D(1, 0, 0, 1, 0, 6)
+auto_calculate_length_and_angle = false
+length = 5.0
+bone_angle = 1.5708
+
+[node name="ElbowBack" type="Polygon2D" parent="Hip/Torso/ArmBack/ForearmBack"]
+z_index = -2
+color = Color(0.17, 0.32, 0.47, 1)
+polygon = PackedVector2Array(0, -2.5, 1.47, -2.02, 2.38, -0.77, 2.38, 0.77, 1.47, 2.02, 0, 2.5, -1.47, 2.02, -2.38, 0.77, -2.38, -0.77, -1.47, -2.02)
+
+[node name="ForearmBackShape" type="Polygon2D" parent="Hip/Torso/ArmBack/ForearmBack"]
+z_index = -2
+color = Color(0.17, 0.32, 0.47, 1)
+polygon = PackedVector2Array(-2.2, 0.0, 2.2, 0.0, 2.2, 2.8, 2.03, 3.64, 1.56, 4.36, 0.84, 4.83, 0.0, 5.0, -0.84, 4.83, -1.56, 4.36, -2.03, 3.64, -2.2, 2.8)
+
+[node name="ArmFront" type="Bone2D" parent="Hip/Torso"]
+position = Vector2(8.5, -9)
+rest = Transform2D(1, 0, 0, 1, 8.5, -9)
+auto_calculate_length_and_angle = false
+length = 6.0
+bone_angle = 1.5708
+
+[node name="ArmFrontShape" type="Polygon2D" parent="Hip/Torso/ArmFront"]
+z_index = 4
+color = Color(0.36, 0.66, 0.86, 1)
+polygon = PackedVector2Array(-2.5, -2.5, 2.5, -2.5, 2.5, 6, -2.5, 6)
+
+[node name="ForearmFront" type="Bone2D" parent="Hip/Torso/ArmFront"]
+position = Vector2(0, 6)
+rest = Transform2D(1, 0, 0, 1, 0, 6)
+auto_calculate_length_and_angle = false
+length = 5.0
+bone_angle = 1.5708
+
+[node name="ElbowFront" type="Polygon2D" parent="Hip/Torso/ArmFront/ForearmFront"]
+z_index = 4
+color = Color(0.26, 0.48, 0.67, 1)
+polygon = PackedVector2Array(0, -2.5, 1.47, -2.02, 2.38, -0.77, 2.38, 0.77, 1.47, 2.02, 0, 2.5, -1.47, 2.02, -2.38, 0.77, -2.38, -0.77, -1.47, -2.02)
+
+[node name="ForearmFrontShape" type="Polygon2D" parent="Hip/Torso/ArmFront/ForearmFront"]
+z_index = 4
+color = Color(0.26, 0.48, 0.67, 1)
+polygon = PackedVector2Array(-2.2, 0.0, 2.2, 0.0, 2.2, 2.8, 2.03, 3.64, 1.56, 4.36, 0.84, 4.83, 0.0, 5.0, -0.84, 4.83, -1.56, 4.36, -2.03, 3.64, -2.2, 2.8)
+
+[node name="LegBack" type="Bone2D" parent="Hip"]
+position = Vector2(-5, 0)
+rest = Transform2D(1, 0, 0, 1, -5, 0)
+auto_calculate_length_and_angle = false
+length = 5.5
+bone_angle = 1.5708
+
+[node name="ThighBackShape" type="Polygon2D" parent="Hip/LegBack"]
+z_index = -2
+color = Color(0.26, 0.48, 0.67, 1)
+polygon = PackedVector2Array(-3, 0, 3, 0, 3, 5.5, -3, 5.5)
+
+[node name="ShinBack" type="Bone2D" parent="Hip/LegBack"]
+position = Vector2(0, 5.5)
+rest = Transform2D(1, 0, 0, 1, 0, 5.5)
+auto_calculate_length_and_angle = false
+length = 5.5
+bone_angle = 1.5708
+
+[node name="KneeBack" type="Polygon2D" parent="Hip/LegBack/ShinBack"]
+z_index = -2
+color = Color(0.17, 0.32, 0.47, 1)
+polygon = PackedVector2Array(0, -3, 1.76, -2.43, 2.85, -0.93, 2.85, 0.93, 1.76, 2.43, 0, 3, -1.76, 2.43, -2.85, 0.93, -2.85, -0.93, -1.76, -2.43)
+
+[node name="ShinBackShape" type="Polygon2D" parent="Hip/LegBack/ShinBack"]
+z_index = -2
+color = Color(0.17, 0.32, 0.47, 1)
+polygon = PackedVector2Array(-2.7, 0.0, 2.7, 0.0, 2.7, 2.8, 2.49, 3.83, 1.91, 4.71, 1.03, 5.29, 0.0, 5.5, -1.03, 5.29, -1.91, 4.71, -2.49, 3.83, -2.7, 2.8)
+
+[node name="LegFront" type="Bone2D" parent="Hip"]
+position = Vector2(5, 0)
+rest = Transform2D(1, 0, 0, 1, 5, 0)
+auto_calculate_length_and_angle = false
+length = 5.5
+bone_angle = 1.5708
+
+[node name="ThighFrontShape" type="Polygon2D" parent="Hip/LegFront"]
+z_index = 3
+color = Color(0.36, 0.66, 0.86, 1)
+polygon = PackedVector2Array(-3, 0, 3, 0, 3, 5.5, -3, 5.5)
+
+[node name="ShinFront" type="Bone2D" parent="Hip/LegFront"]
+position = Vector2(0, 5.5)
+rest = Transform2D(1, 0, 0, 1, 0, 5.5)
+auto_calculate_length_and_angle = false
+length = 5.5
+bone_angle = 1.5708
+
+[node name="KneeFront" type="Polygon2D" parent="Hip/LegFront/ShinFront"]
+z_index = 3
+color = Color(0.26, 0.48, 0.67, 1)
+polygon = PackedVector2Array(0, -3, 1.76, -2.43, 2.85, -0.93, 2.85, 0.93, 1.76, 2.43, 0, 3, -1.76, 2.43, -2.85, 0.93, -2.85, -0.93, -1.76, -2.43)
+
+[node name="ShinFrontShape" type="Polygon2D" parent="Hip/LegFront/ShinFront"]
+z_index = 3
+color = Color(0.26, 0.48, 0.67, 1)
+polygon = PackedVector2Array(-2.7, 0.0, 2.7, 0.0, 2.7, 2.8, 2.49, 3.83, 1.91, 4.71, 1.03, 5.29, 0.0, 5.5, -1.03, 5.29, -1.91, 4.71, -2.49, 3.83, -2.7, 2.8)
+
+; Cuelga de `Visuals` y no del `Player` para que su `root_node` por defecto
+; (`..`) sea justo el nodo que contiene al esqueleto: así las pistas se escriben
+; `Skeleton/Torso:rotation` y la biblioteca sirve a cualquier entidad que monte
+; el mismo esqueleto bajo sus visuales.
+;
+; El nombre NO es "AnimationPlayer": el `Attacker` del kit busca el suyo con
+; `ComponentLookup`, que cae a "el primero de ese tipo a cualquier profundidad"
+; si no encuentra un hijo con ese nombre. Hoy busca desde el Kit y no llegaría
+; aquí, pero un componente que buscara desde el Player sí, y se llevaría este.
